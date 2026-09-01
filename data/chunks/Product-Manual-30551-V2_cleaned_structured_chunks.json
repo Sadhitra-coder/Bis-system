@@ -1,0 +1,95 @@
+{
+  "document_id": "Product-Manual-30551-V2_cleaned_structured",
+  "source_file": "Product-Manual-30551-V2_cleaned_structured_normalized.md",
+  "total_chunks": 7,
+  "chunks": [
+    {
+      "chunk_id": "Product-Manual-30551-V2_cleaned_structured_chunk_0001",
+      "document_id": "Product-Manual-30551-V2_cleaned_structured",
+      "source_file": "Product-Manual-30551-V2_cleaned_structured_normalized.md",
+      "section": "ACCORDING TO IS 3055 (Part 1) : 1994",
+      "heading_context": [
+        "PRODUCT MANUAL FOR CLINICAL THERMOMETERS - SOLID STEM TYPE",
+        "ACCORDING TO IS 3055 (Part 1) : 1994"
+      ],
+      "content": "# PRODUCT MANUAL FOR CLINICAL THERMOMETERS - SOLID STEM TYPE\n\n## ACCORDING TO IS 3055 (Part 1) : 1994\n\nThis Product Manual shall be used as reference material by all Regional/Branch Offices & licensees to ensure coherence of practice and transparency in operation of certification under Scheme-I of Bureau of Indian Standards (Conformity Assessment) Regulations, 2018 for various products. The document may also be used by prospective applicants desirous of obtaining BIS certification licence/certificate.",
+      "character_count": 506
+    },
+    {
+      "chunk_id": "Product-Manual-30551-V2_cleaned_structured_chunk_0002",
+      "document_id": "Product-Manual-30551-V2_cleaned_structured",
+      "source_file": "Product-Manual-30551-V2_cleaned_structured_normalized.md",
+      "section": "1. Product",
+      "heading_context": [
+        "PRODUCT MANUAL FOR CLINICAL THERMOMETERS - SOLID STEM TYPE",
+        "1. Product"
+      ],
+      "content": "## 1. Product\n\n| Parameter | Details |\n| :--- | :--- |\n| **Standard** | IS 3055 (Part 1) : 1994 |\n| **Title** | Clinical Thermometers - Solid stem Type |\n| **No. of Amendments** | 5 |\n\n## 2. Sampling Guidelines\n\n| Parameter | Details |\n| :--- | :--- |\n| **a) Raw material** | Glass Tubing: IS 4529:1968 (except for ' stability of bulb tube ' & ' limit of alkalinity ' ) |\n| **b) Grouping guidelines** | Standard covers two patterns only. |\n| **c) Sample Size** | 10 pieces |",
+      "character_count": 474
+    },
+    {
+      "chunk_id": "Product-Manual-30551-V2_cleaned_structured_chunk_0003",
+      "document_id": "Product-Manual-30551-V2_cleaned_structured",
+      "source_file": "Product-Manual-30551-V2_cleaned_structured_normalized.md",
+      "section": "3. List of Test Equipment",
+      "heading_context": [
+        "PRODUCT MANUAL FOR CLINICAL THERMOMETERS - SOLID STEM TYPE",
+        "3. List of Test Equipment"
+      ],
+      "content": "## 3. List of Test Equipment\n\nPlease refer ANNEX - A.\n\n## 4. Scheme of Inspection and Testing\n\nPlease refer ANNEX - B.",
+      "character_count": 118
+    },
+    {
+      "chunk_id": "Product-Manual-30551-V2_cleaned_structured_chunk_0004",
+      "document_id": "Product-Manual-30551-V2_cleaned_structured",
+      "source_file": "Product-Manual-30551-V2_cleaned_structured_normalized.md",
+      "section": "5. Possible tests in a day",
+      "heading_context": [
+        "PRODUCT MANUAL FOR CLINICAL THERMOMETERS - SOLID STEM TYPE",
+        "5. Possible tests in a day"
+      ],
+      "content": "## 5. Possible tests in a day\n\n(i) Construction as per Cl. 7.3\n(ii) Dimensions as per Cl. 7.4\n(iii) Graduation and numbering as per Cl. 7.5\n(iv) Appearance as per Cl. 8.1\n(v) Influence of immersion time as per Cl. 8.3\n\n## 6. Scope of the Licence\n\nLicence is granted to use Standard Mark as per IS 3055 (Part 1): 1994 with the following scope:\n\n| Parameter | Details |\n| :--- | :--- |\n| **Name of the product** | Clinical Thermometers |\n| **Type** | Solid stem, Mercury-in-glass, Oral/ Rectal type |\n| **Range** | |",
+      "character_count": 514
+    },
+    {
+      "chunk_id": "Product-Manual-30551-V2_cleaned_structured_chunk_0005",
+      "document_id": "Product-Manual-30551-V2_cleaned_structured",
+      "source_file": "Product-Manual-30551-V2_cleaned_structured_normalized.md",
+      "section": "List Of Test Equipment",
+      "heading_context": [
+        "PRODUCT MANUAL FOR CLINICAL THERMOMETERS - SOLID STEM TYPE",
+        "ANNEX A",
+        "List Of Test Equipment"
+      ],
+      "content": "## ANNEX A\n\n### List Of Test Equipment\n\nMajor test equipment essentially required to test as per the Indian Standard\n\n| S. No. | Tests used in with Clause Reference | Test Equipment |\n| :--- | :--- | :--- |\n| 1. | Materials- Bulb as per Cl. 7.2.2 | a) Special test thermometers<br>b) Temperature controlled test bath (liquid bath or metal block type oven)<br>c) Ice bath |\n| 2. | Materials- hydrolytic resistance of glass as per Cl. 7.2.3 | a) Standard Lab chemicals and apparatus<br>b) Ball mill<br>c) Sieving-machine<br>d) Ultrasonic cleaner<br>e) Drying Oven<br>f) Thermometer<br>g) Heating Bath |\n| 3. | Hardness of maximum indicating device as per Cl. 7.3.2.1 | a) Centrifuge<br>b) Stopwatch<br>c) Temperature controlled water bath |\n| 4. | Dimension as per Cl. 7.4 | a) Vernier Callipers<br>b) Micrometer |\n| 5. | Ageing and Accuracy as per Cl. 8.2 | a) Comparator water bath<br>b) Reference Thermometer |\n| 6. | Influence of immersion time as per Cl. 8.3 | a) Temperature controlled water bath<br>b) Stopwatch<br>c) Reference Thermometer |\n\nThe above list is indicative only and may not be treated as exhaustive.",
+      "character_count": 1119
+    },
+    {
+      "chunk_id": "Product-Manual-30551-V2_cleaned_structured_chunk_0006",
+      "document_id": "Product-Manual-30551-V2_cleaned_structured",
+      "source_file": "Product-Manual-30551-V2_cleaned_structured_normalized.md",
+      "section": "Scheme Of Inspection And Testing",
+      "heading_context": [
+        "PRODUCT MANUAL FOR CLINICAL THERMOMETERS - SOLID STEM TYPE",
+        "ANNEX B",
+        "Scheme Of Inspection And Testing"
+      ],
+      "content": "## ANNEX B\n\n### Scheme Of Inspection And Testing\n\n1. **LABORATORY** - A laboratory shall be maintained which shall be suitably equipped (as per the requirement given in column 2 of Table 1) and staffed, where different tests given in the specification shall be carried out in accordance with the methods given in the specification.\n    1.1 The manufacturer shall prepare a calibration plan for the test equipment.\n\n2. **TEST RECORDS** - The manufacturer shall maintain test records for the tests carried out to establish conformity.\n\n3. **LABELLING AND MARKING** - As per the requirements of IS 3055 (Part 1): 1994.\n\n4. **CONTROL UNIT** - All the clinical thermometers of the same pattern manufactured in a day shall constitute a control unit.\n\n5. **LEVELS OF CONTROL** - The tests as indicated in column 1 of Table 1 and the levels of control in column 3 of Table 1, shall be carried out on the whole production of the factory which is covered by this plan and appropriate records maintained in accordance with paragraph 2 above.\n\n6. **REJECTIONS** - Disposal of non-conforming product shall be done in such a way so as to ensure that there is no violation of provisions of BIS Act, 2016. Glass piece of rejected thermometers may be scrapped after recovering the mercury.",
+      "character_count": 1272
+    },
+    {
+      "chunk_id": "Product-Manual-30551-V2_cleaned_structured_chunk_0007",
+      "document_id": "Product-Manual-30551-V2_cleaned_structured",
+      "source_file": "Product-Manual-30551-V2_cleaned_structured_normalized.md",
+      "section": "TABLE 1",
+      "heading_context": [
+        "PRODUCT MANUAL FOR CLINICAL THERMOMETERS - SOLID STEM TYPE",
+        "ANNEX B",
+        "Scheme Of Inspection And Testing",
+        "TABLE 1"
+      ],
+      "content": "#### TABLE 1\n\n| Cl. | Test Details Requirement | Test Methods Clause | Test Methods Reference | Test equipment requirement R: required (or) S: Sub-contracting permitted | No. of Sample | Frequency | Remarks |\n| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |\n| 7.2 | Materials | | | | | | |\n| 7.2 | Glass tubing | 7.2.1 | | S | | | # |\n| 7.2 | Bulb | 7.2.2 | IS 3055 (Pt 1) | S | Every consignment received | | # |\n| 7.2 | Glass | 7.2.3 | | S | One from every batch of glass used for maximum device, capillary tube & bulb received. | | # |\n| 7.2 | Thermometric liquid | 7.2.4 | | - | - | - | Test certificate from supplier |\n| 7.3 | Construction | 7.3.1 - 7.3.6 | IS 3055 (Pt 1) | R | Each thermometer | Each thermometer | |\n| 7.4 | Dimensions | 7.4 & Table 1 | IS 3055 (Pt 1) | R | Each thermometer | Each thermometer | |\n| 7.5 | Graduation Numbering Permanency and Marking | 7.5.1- 7.5.7 | IS 3055 (Pt 1) | R | Each thermometer | Each thermometer | |\n| 7.5 | Marking | 7.5.8 | IS 3055 (Pt 1) | R | 1% with min. 5 thermometers | Each control unit | |\n| 8.1 | Appearance | 8.1 | IS 3055 (Pt 1) | R | Each thermometer | Each thermometer | |\n| 8.2 | Ageing and Accuracy | 8.2 | IS 3055 (Pt 1) | R | 1% with min. 5 thermometers | Each control unit | |\n| 8.3 | Influence of immersion time | 8.3 | IS 3055 (Pt 1) | R | 1% with min. 5 thermometers | Each control unit | |\n\n**Note-1:** Sub-contracting is permitted to a laboratory recognized by the Bureau or Government laboratories empanelled by the Bureau.\n\n**Note-2:** The control unit and levels of control as decided by the Bureau are obligatory to which the licensee shall comply with.",
+      "character_count": 1642
+    }
+  ]
+}

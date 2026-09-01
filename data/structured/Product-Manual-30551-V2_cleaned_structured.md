@@ -1,0 +1,101 @@
+# PRODUCT MANUAL FOR CLINICAL THERMOMETERS - SOLID STEM TYPE
+## ACCORDING TO IS 3055 (Part 1) : 1994
+
+This Product Manual shall be used as reference material by all Regional/Branch Offices & licensees to ensure coherence of practice and transparency in operation of certification under Scheme-I of Bureau of Indian Standards (Conformity Assessment) Regulations, 2018 for various products. The document may also be used by prospective applicants desirous of obtaining BIS certification licence/certificate.
+
+## 1. Product
+
+| Parameter | Details |
+| :--- | :--- |
+| **Standard** | IS 3055 (Part 1) : 1994 |
+| **Title** | Clinical Thermometers - Solid stem Type |
+| **No. of Amendments** | 5 |
+
+## 2. Sampling Guidelines
+
+| Parameter | Details |
+| :--- | :--- |
+| **a) Raw material** | Glass Tubing: IS 4529:1968 (except for ' stability of bulb tube ' & ' limit of alkalinity ' ) |
+| **b) Grouping guidelines** | Standard covers two patterns only. |
+| **c) Sample Size** | 10 pieces |
+
+## 3. List of Test Equipment
+
+Please refer ANNEX - A.
+
+## 4. Scheme of Inspection and Testing
+
+Please refer ANNEX - B.
+
+## 5. Possible tests in a day
+
+(i) Construction as per Cl. 7.3
+(ii) Dimensions as per Cl. 7.4
+(iii) Graduation and numbering as per Cl. 7.5
+(iv) Appearance as per Cl. 8.1
+(v) Influence of immersion time as per Cl. 8.3
+
+## 6. Scope of the Licence
+
+Licence is granted to use Standard Mark as per IS 3055 (Part 1): 1994 with the following scope:
+
+| Parameter | Details |
+| :--- | :--- |
+| **Name of the product** | Clinical Thermometers |
+| **Type** | Solid stem, Mercury-in-glass, Oral/ Rectal type |
+| **Range** | |
+
+## ANNEX A
+
+### List Of Test Equipment
+
+Major test equipment essentially required to test as per the Indian Standard
+
+| S. No. | Tests used in with Clause Reference | Test Equipment |
+| :--- | :--- | :--- |
+| 1. | Materials- Bulb as per Cl. 7.2.2 | a) Special test thermometers<br>b) Temperature controlled test bath (liquid bath or metal block type oven)<br>c) Ice bath |
+| 2. | Materials- hydrolytic resistance of glass as per Cl. 7.2.3 | a) Standard Lab chemicals and apparatus<br>b) Ball mill<br>c) Sieving-machine<br>d) Ultrasonic cleaner<br>e) Drying Oven<br>f) Thermometer<br>g) Heating Bath |
+| 3. | Hardness of maximum indicating device as per Cl. 7.3.2.1 | a) Centrifuge<br>b) Stopwatch<br>c) Temperature controlled water bath |
+| 4. | Dimension as per Cl. 7.4 | a) Vernier Callipers<br>b) Micrometer |
+| 5. | Ageing and Accuracy as per Cl. 8.2 | a) Comparator water bath<br>b) Reference Thermometer |
+| 6. | Influence of immersion time as per Cl. 8.3 | a) Temperature controlled water bath<br>b) Stopwatch<br>c) Reference Thermometer |
+
+The above list is indicative only and may not be treated as exhaustive.
+
+## ANNEX B
+
+### Scheme Of Inspection And Testing
+
+1. **LABORATORY** - A laboratory shall be maintained which shall be suitably equipped (as per the requirement given in column 2 of Table 1) and staffed, where different tests given in the specification shall be carried out in accordance with the methods given in the specification.
+    1.1 The manufacturer shall prepare a calibration plan for the test equipment.
+
+2. **TEST RECORDS** - The manufacturer shall maintain test records for the tests carried out to establish conformity.
+
+3. **LABELLING AND MARKING** - As per the requirements of IS 3055 (Part 1): 1994.
+
+4. **CONTROL UNIT** - All the clinical thermometers of the same pattern manufactured in a day shall constitute a control unit.
+
+5. **LEVELS OF CONTROL** - The tests as indicated in column 1 of Table 1 and the levels of control in column 3 of Table 1, shall be carried out on the whole production of the factory which is covered by this plan and appropriate records maintained in accordance with paragraph 2 above.
+
+6. **REJECTIONS** - Disposal of non-conforming product shall be done in such a way so as to ensure that there is no violation of provisions of BIS Act, 2016. Glass piece of rejected thermometers may be scrapped after recovering the mercury.
+
+#### TABLE 1
+
+| Cl. | Test Details Requirement | Test Methods Clause | Test Methods Reference | Test equipment requirement R: required (or) S: Sub-contracting permitted | No. of Sample | Frequency | Remarks |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| 7.2 | Materials | | | | | | |
+| 7.2 | Glass tubing | 7.2.1 | | S | | | # |
+| 7.2 | Bulb | 7.2.2 | IS 3055 (Pt 1) | S | Every consignment received | | # |
+| 7.2 | Glass | 7.2.3 | | S | One from every batch of glass used for maximum device, capillary tube & bulb received. | | # |
+| 7.2 | Thermometric liquid | 7.2.4 | | - | - | - | Test certificate from supplier |
+| 7.3 | Construction | 7.3.1 - 7.3.6 | IS 3055 (Pt 1) | R | Each thermometer | Each thermometer | |
+| 7.4 | Dimensions | 7.4 & Table 1 | IS 3055 (Pt 1) | R | Each thermometer | Each thermometer | |
+| 7.5 | Graduation Numbering Permanency and Marking | 7.5.1- 7.5.7 | IS 3055 (Pt 1) | R | Each thermometer | Each thermometer | |
+| 7.5 | Marking | 7.5.8 | IS 3055 (Pt 1) | R | 1% with min. 5 thermometers | Each control unit | |
+| 8.1 | Appearance | 8.1 | IS 3055 (Pt 1) | R | Each thermometer | Each thermometer | |
+| 8.2 | Ageing and Accuracy | 8.2 | IS 3055 (Pt 1) | R | 1% with min. 5 thermometers | Each control unit | |
+| 8.3 | Influence of immersion time | 8.3 | IS 3055 (Pt 1) | R | 1% with min. 5 thermometers | Each control unit | |
+
+**Note-1:** Sub-contracting is permitted to a laboratory recognized by the Bureau or Government laboratories empanelled by the Bureau.
+
+**Note-2:** The control unit and levels of control as decided by the Bureau are obligatory to which the licensee shall comply with.
