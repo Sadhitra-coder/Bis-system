@@ -1,62 +1,78 @@
 """
 Master BIS Document Processing Pipeline
 
-Processes all PDF files inside:
+Orchestrates the complete document processing workflow:
 
-    data/raw/
+    PDF (data/raw/**/[all PDFs])
+        ↓
+    Extraction (Docling)
+        ↓ (markdown output)
+    Cleaning (lossless formatting)
+        ↓ (cleaned output)
+    Structuring (Groq AI)
+        ↓ (structured output)
+    Normalization (artifact removal)
+        ↓ (normalized output)
+    Chunking (semantic segmentation)
+        ↓ (JSON chunks)
+    Ready for embedding
 
-including all subfolders.
+ARCHITECTURE:
 
-Pipeline:
+This is the MASTER ORCHESTRATOR. It:
+    - Discovers all PDFs recursively (data/raw/**/[PDFs])
+    - Determines relative paths
+    - Creates appropriate output directories
+    - Calls each step module with correct parameters
+    - Handles errors gracefully
+    - Logs progress and failures
+    - Provides summary report
 
-    PDF
-        ↓
-    Extraction
-        ↓
-    Cleaning
-        ↓
-    AI Structuring
-        ↓
-    Markdown Normalization
-        ↓
-    Chunking
-        ↓
-    Embedding
+Each processing step is INDEPENDENT:
+    - Processes one file at a time
+    - Takes input_path and output_path as parameters
+    - Does NOT contain hardcoded directory logic
+    - Creates output directories as needed
 
-The relative folder structure is preserved.
+DIRECTORY STRUCTURE PRESERVED:
+
+Input:
+    data/raw/clinical/thermometer/manual.pdf
+
+Outputs:
+    data/markdown/clinical/thermometer/manual.md
+    data/cleaned/clinical/thermometer/manual_cleaned.md
+    data/structured/clinical/thermometer/manual_structured.md
+    data/normalized/clinical/thermometer/manual_normalized.md
+    data/chunks/clinical/thermometer/manual_chunks.json
 """
 
 import logging
+import sys
 from pathlib import Path
+from typing import Dict, List, Optional
 
-
-# ============================================================
-# IMPORT PIPELINE STEPS
-# ============================================================
-
+# Import processing step modules
 from app.steps.extract import extract_pdf
 from app.steps.clean import clean_markdown_file
-from app.steps.structure import structure_markdown
-from app.steps.normalize import normalize_markdown
-from app.steps.chunk import create_chunks
+from app.steps.structure import structure_markdown_file
+from app.steps.normalize import normalize_markdown_file
+from app.steps.chunk import chunk_markdown_file
 
 
 # ============================================================
 # CONFIGURATION
 # ============================================================
 
+# Safely determine PROJECT_ROOT
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
+# Define directory structure
 RAW_DIR = PROJECT_ROOT / "data" / "raw"
-
 MARKDOWN_DIR = PROJECT_ROOT / "data" / "markdown"
-
 CLEANED_DIR = PROJECT_ROOT / "data" / "cleaned"
-
 STRUCTURED_DIR = PROJECT_ROOT / "data" / "structured"
-
 NORMALIZED_DIR = PROJECT_ROOT / "data" / "normalized"
-
 CHUNKS_DIR = PROJECT_ROOT / "data" / "chunks"
 
 
@@ -64,594 +80,465 @@ CHUNKS_DIR = PROJECT_ROOT / "data" / "chunks"
 # LOGGING
 # ============================================================
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(levelname)s | %(message)s"
-)
-
 logger = logging.getLogger(__name__)
 
 
 # ============================================================
-# GET RELATIVE PATH
+# PIPELINE STATE
 # ============================================================
 
-def get_relative_path(
-    file_path: Path,
-    base_dir: Path
-) -> Path:
-    """
-    Returns the path relative to the base directory.
+class PipelineState:
+    """Tracks pipeline execution state."""
 
-    Example:
+    def __init__(self):
+        self.successful = []
+        self.failed = []
+        self.skipped = []
 
-    file:
-        data/raw/clinical/manual.pdf
+    def add_success(self, pdf_path: Path, results: Dict):
+        """Record successful PDF processing."""
+        self.successful.append({
+            "pdf": str(pdf_path),
+            "results": results
+        })
 
-    base:
-        data/raw
+    def add_failure(self, pdf_path: Path, error: Exception):
+        """Record failed PDF processing."""
+        self.failed.append({
+            "pdf": str(pdf_path),
+            "error": str(error)
+        })
 
-    result:
-        clinical/manual.pdf
-    """
+    def add_skip(self, pdf_path: Path, reason: str):
+        """Record skipped PDF."""
+        self.skipped.append({
+            "pdf": str(pdf_path),
+            "reason": reason
+        })
 
-    return file_path.relative_to(base_dir)
+    def summary(self) -> str:
+        """Generate summary report."""
+        lines = [
+            "\n" + "=" * 70,
+            "PIPELINE SUMMARY",
+            "=" * 70,
+            f"Total PDFs discovered: {len(self.successful) + len(self.failed) + len(self.skipped)}",
+            f"Successfully processed: {len(self.successful)}",
+            f"Failed: {len(self.failed)}",
+            f"Skipped: {len(self.skipped)}",
+        ]
+
+        if self.failed:
+            lines.append("\nFAILED PDFs:")
+            for item in self.failed:
+                lines.append(f"  - {item['pdf']}: {item['error']}")
+
+        if self.skipped:
+            lines.append("\nSKIPPED PDFs:")
+            for item in self.skipped:
+                lines.append(f"  - {item['pdf']}: {item['reason']}")
+
+        lines.append("=" * 70 + "\n")
+
+        return "\n".join(lines)
 
 
 # ============================================================
-# STEP 1: EXTRACT PDF
+# FILENAME STRATEGY
+# ============================================================
+
+def get_output_stem(
+    relative_path: Path,
+    step_name: str
+) -> str:
+    """
+    Generate output filename stem for each step.
+
+    This ensures clean, deterministic filenames without
+    suffix accumulation (e.g., no _cleaned_structured_normalized).
+
+    Each step's output has a clean single suffix:
+        - extract: {name}.md
+        - clean: {name}_cleaned.md
+        - structure: {name}_structured.md
+        - normalize: {name}_normalized.md
+        - chunk: {name}_chunks.json
+
+    Args:
+        relative_path: Path relative to data/raw/
+        step_name: Step identifier (extract, clean, structure, normalize, chunk)
+
+    Returns:
+        Clean output filename stem
+    """
+
+    # Get the original name (without .pdf)
+    base_name = relative_path.stem
+
+    if step_name == "extract":
+        return base_name
+
+    elif step_name == "clean":
+        return f"{base_name}_cleaned"
+
+    elif step_name == "structure":
+        return f"{base_name}_structured"
+
+    elif step_name == "normalize":
+        return f"{base_name}_normalized"
+
+    elif step_name == "chunk":
+        return f"{base_name}_chunks"
+
+    else:
+        return base_name
+
+
+# ============================================================
+# STEP EXECUTION
 # ============================================================
 
 def run_extraction(
-    pdf_path: Path
+    pdf_path: Path,
+    relative_path: Path
 ) -> Path:
     """
-    Extract one PDF into Markdown.
+    STEP 1: Extract PDF to Markdown.
+
+    Args:
+        pdf_path: Full path to PDF.
+        relative_path: Relative path from data/raw/.
+
+    Returns:
+        Path to generated Markdown file.
     """
 
-    relative_path = get_relative_path(
-        pdf_path,
-        RAW_DIR
-    )
-
-    output_path = (
+    output_file = (
         MARKDOWN_DIR
-        / relative_path.with_suffix(".md")
+        / relative_path.parent
+        / (get_output_stem(relative_path, "extract") + ".md")
     )
 
-    output_path.parent.mkdir(
-        parents=True,
-        exist_ok=True
-    )
+    output_file.parent.mkdir(parents=True, exist_ok=True)
 
     logger.info(
-        "STEP 1 | Extracting: %s",
-        pdf_path
+        "STEP 1 EXTRACT | input=%s | output=%s",
+        pdf_path.name,
+        output_file.name
     )
 
-    # --------------------------------------------------------
-    # Import locally because current extract_pdf implementation
-    # may use its own output path.
-    # --------------------------------------------------------
+    extract_pdf(pdf_path, output_file)
 
-    from docling.document_converter import DocumentConverter
+    return output_file
 
-    converter = DocumentConverter()
-
-    result = converter.convert(
-        str(pdf_path)
-    )
-
-    markdown = (
-        result.document.export_to_markdown()
-    )
-
-    output_path.write_text(
-        markdown,
-        encoding="utf-8"
-    )
-
-    logger.info(
-        "STEP 1 COMPLETE | %s",
-        output_path
-    )
-
-    return output_path
-
-
-# ============================================================
-# STEP 2: CLEAN MARKDOWN
-# ============================================================
 
 def run_cleaning(
     markdown_path: Path,
     relative_path: Path
 ) -> Path:
     """
-    Clean extracted Markdown.
+    STEP 2: Clean extracted Markdown.
+
+    Args:
+        markdown_path: Path to raw Markdown.
+        relative_path: Relative path from data/raw/.
+
+    Returns:
+        Path to cleaned Markdown file.
     """
 
-    output_path = (
+    output_file = (
         CLEANED_DIR
-        / relative_path.with_name(
-            relative_path.stem
-            + "_cleaned.md"
-        )
+        / relative_path.parent
+        / (get_output_stem(relative_path, "clean") + ".md")
     )
 
-    output_path.parent.mkdir(
-        parents=True,
-        exist_ok=True
-    )
+    output_file.parent.mkdir(parents=True, exist_ok=True)
 
     logger.info(
-        "STEP 2 | Cleaning: %s",
-        markdown_path.name
+        "STEP 2 CLEAN | input=%s | output=%s",
+        markdown_path.name,
+        output_file.name
     )
 
-    clean_markdown_file(
-        input_path=str(markdown_path),
-        output_path=str(output_path)
-    )
+    clean_markdown_file(markdown_path, output_file)
 
-    logger.info(
-        "STEP 2 COMPLETE | %s",
-        output_path
-    )
+    return output_file
 
-    return output_path
-
-
-# ============================================================
-# STEP 3: STRUCTURE MARKDOWN
-# ============================================================
 
 def run_structuring(
     cleaned_path: Path,
     relative_path: Path
 ) -> Path:
     """
-    Structure cleaned Markdown using Groq.
+    STEP 3: Structure Markdown using Groq.
+
+    Args:
+        cleaned_path: Path to cleaned Markdown.
+        relative_path: Relative path from data/raw/.
+
+    Returns:
+        Path to structured Markdown file.
     """
 
-    output_path = (
+    output_file = (
         STRUCTURED_DIR
-        / relative_path.with_name(
-            relative_path.stem
-            + "_structured.md"
-        )
+        / relative_path.parent
+        / (get_output_stem(relative_path, "structure") + ".md")
     )
 
-    output_path.parent.mkdir(
-        parents=True,
-        exist_ok=True
-    )
+    output_file.parent.mkdir(parents=True, exist_ok=True)
+
+    document_id = relative_path.stem
 
     logger.info(
-        "STEP 3 | Structuring: %s",
-        cleaned_path.name
+        "STEP 3 STRUCTURE | input=%s | output=%s",
+        cleaned_path.name,
+        output_file.name
     )
 
-    markdown_content = (
-        cleaned_path.read_text(
-            encoding="utf-8"
-        )
-    )
-
-    document_id = (
-        relative_path.stem
-    )
-
-    structured_markdown = structure_markdown(
-        markdown_content=markdown_content,
+    structure_markdown_file(
+        cleaned_path,
+        output_file,
         document_id=document_id
     )
 
-    output_path.write_text(
-        structured_markdown,
-        encoding="utf-8"
-    )
+    return output_file
 
-    logger.info(
-        "STEP 3 COMPLETE | %s",
-        output_path
-    )
-
-    return output_path
-
-
-# ============================================================
-# STEP 4: NORMALIZE MARKDOWN
-# ============================================================
 
 def run_normalization(
     structured_path: Path,
     relative_path: Path
 ) -> Path:
     """
-    Normalize Markdown escaping artifacts.
+    STEP 4: Normalize Markdown escaping.
+
+    Args:
+        structured_path: Path to structured Markdown.
+        relative_path: Relative path from data/raw/.
+
+    Returns:
+        Path to normalized Markdown file.
     """
 
-    output_path = (
+    output_file = (
         NORMALIZED_DIR
-        / relative_path.with_name(
-            relative_path.stem
-            + "_normalized.md"
-        )
+        / relative_path.parent
+        / (get_output_stem(relative_path, "normalize") + ".md")
     )
 
-    output_path.parent.mkdir(
-        parents=True,
-        exist_ok=True
-    )
+    output_file.parent.mkdir(parents=True, exist_ok=True)
 
     logger.info(
-        "STEP 4 | Normalizing: %s",
-        structured_path.name
+        "STEP 4 NORMALIZE | input=%s | output=%s",
+        structured_path.name,
+        output_file.name
     )
 
-    content = (
-        structured_path.read_text(
-            encoding="utf-8"
-        )
-    )
+    normalize_markdown_file(structured_path, output_file)
 
-    normalized_content = normalize_markdown(
-        content
-    )
+    return output_file
 
-    output_path.write_text(
-        normalized_content,
-        encoding="utf-8"
-    )
-
-    logger.info(
-        "STEP 4 COMPLETE | %s",
-        output_path
-    )
-
-    return output_path
-
-
-# ============================================================
-# STEP 5: CHUNK DOCUMENT
-# ============================================================
 
 def run_chunking(
     normalized_path: Path,
     relative_path: Path
 ) -> Path:
     """
-    Chunk normalized Markdown.
+    STEP 5: Chunk normalized Markdown.
+
+    Args:
+        normalized_path: Path to normalized Markdown.
+        relative_path: Relative path from data/raw/.
+
+    Returns:
+        Path to chunk JSON file.
     """
 
-    output_path = (
+    output_file = (
         CHUNKS_DIR
-        / relative_path.with_name(
-            relative_path.stem
-            + "_chunks.json"
-        )
+        / relative_path.parent
+        / (get_output_stem(relative_path, "chunk") + ".json")
     )
 
-    output_path.parent.mkdir(
-        parents=True,
-        exist_ok=True
-    )
+    output_file.parent.mkdir(parents=True, exist_ok=True)
+
+    document_id = relative_path.stem
+    source_file = str(relative_path)
 
     logger.info(
-        "STEP 5 | Chunking: %s",
-        normalized_path.name
+        "STEP 5 CHUNK | input=%s | output=%s",
+        normalized_path.name,
+        output_file.name
     )
 
-    markdown_content = (
-        normalized_path.read_text(
-            encoding="utf-8"
-        )
-    )
-
-    document_id = (
-        relative_path.stem
-    )
-
-    chunks = create_chunks(
-        markdown_content=markdown_content,
+    chunk_markdown_file(
+        normalized_path,
+        output_file,
         document_id=document_id,
-        source_file=str(relative_path)
+        source_file=source_file
     )
 
-    import json
-
-    output_data = {
-        "document_id": document_id,
-        "source_file": str(relative_path),
-        "total_chunks": len(chunks),
-        "chunks": chunks
-    }
-
-    output_path.write_text(
-        json.dumps(
-            output_data,
-            ensure_ascii=False,
-            indent=2
-        ),
-        encoding="utf-8"
-    )
-
-    logger.info(
-        "STEP 5 COMPLETE | %s",
-        output_path
-    )
-
-    logger.info(
-        "Chunks created: %s",
-        len(chunks)
-    )
-
-    return output_path
+    return output_file
 
 
 # ============================================================
 # PROCESS ONE PDF
 # ============================================================
 
-def process_pdf(
-    pdf_path: Path
-):
+def process_pdf(pdf_path: Path) -> Dict[str, Path]:
     """
-    Run the complete pipeline
-    for one PDF.
+    Run complete pipeline for one PDF.
+
+    Args:
+        pdf_path: Full path to PDF file.
+
+    Returns:
+        Dictionary with paths to all outputs.
+
+    Raises:
+        Exception: If any step fails (caller handles it).
     """
 
+    # Get relative path for directory structure preservation
+    relative_pdf_path = pdf_path.relative_to(RAW_DIR)
+
     logger.info(
-        "\n"
-        + "=" * 70
+        "\n" + "=" * 70
     )
 
     logger.info(
-        "PROCESSING DOCUMENT: %s",
-        pdf_path
+        "PROCESSING PDF: %s",
+        relative_pdf_path
     )
 
     logger.info(
         "=" * 70
     )
 
-    # --------------------------------------------------------
-    # Relative path
-    # --------------------------------------------------------
+    # STEP 1: Extract
+    markdown_path = run_extraction(pdf_path, relative_pdf_path)
 
-    relative_pdf_path = get_relative_path(
-        pdf_path,
-        RAW_DIR
-    )
+    # STEP 2: Clean
+    cleaned_path = run_cleaning(markdown_path, relative_pdf_path)
 
-    # --------------------------------------------------------
-    # STEP 1
-    # --------------------------------------------------------
+    # STEP 3: Structure
+    structured_path = run_structuring(cleaned_path, relative_pdf_path)
 
-    markdown_path = run_extraction(
-        pdf_path
-    )
+    # STEP 4: Normalize
+    normalized_path = run_normalization(structured_path, relative_pdf_path)
 
-    # --------------------------------------------------------
-    # STEP 2
-    # --------------------------------------------------------
+    # STEP 5: Chunk
+    chunks_path = run_chunking(normalized_path, relative_pdf_path)
 
-    cleaned_relative_path = (
-        relative_pdf_path.with_name(
-            relative_pdf_path.stem
-            + "_cleaned.md"
-        )
-    )
-
-    cleaned_path = run_cleaning(
-        markdown_path=markdown_path,
-        relative_path=relative_pdf_path
-    )
-
-    # --------------------------------------------------------
-    # STEP 3
-    # --------------------------------------------------------
-
-    structured_relative_path = (
-        cleaned_relative_path.with_name(
-            cleaned_relative_path.stem
-            + "_structured.md"
-        )
-    )
-
-    structured_path = run_structuring(
-        cleaned_path=cleaned_path,
-        relative_path=cleaned_relative_path
-    )
-
-    # --------------------------------------------------------
-    # STEP 4
-    # --------------------------------------------------------
-
-    normalized_relative_path = (
-        structured_relative_path.with_name(
-            structured_relative_path.stem
-            + "_normalized.md"
-        )
-    )
-
-    normalized_path = run_normalization(
-        structured_path=structured_path,
-        relative_path=structured_relative_path
-    )
-
-    # --------------------------------------------------------
-    # STEP 5
-    # --------------------------------------------------------
-
-    chunks_relative_path = (
-        normalized_relative_path
-    )
-
-    chunks_path = run_chunking(
-        normalized_path=normalized_path,
-        relative_path=chunks_relative_path
-    )
-
-    logger.info(
-        "\nDOCUMENT PIPELINE COMPLETED"
-    )
+    logger.info("PIPELINE COMPLETE FOR: %s", relative_pdf_path)
 
     return {
-        "pdf": str(pdf_path),
-        "markdown": str(markdown_path),
-        "cleaned": str(cleaned_path),
-        "structured": str(structured_path),
-        "normalized": str(normalized_path),
-        "chunks": str(chunks_path)
+        "pdf": pdf_path,
+        "markdown": markdown_path,
+        "cleaned": cleaned_path,
+        "structured": structured_path,
+        "normalized": normalized_path,
+        "chunks": chunks_path
     }
 
 
 # ============================================================
-# FIND ALL PDFs
+# FIND PDFs
 # ============================================================
 
-def find_all_pdfs():
+def find_all_pdfs() -> List[Path]:
     """
-    Find every PDF inside data/raw/
-    including all subdirectories.
+    Discover all PDF files recursively in data/raw/.
+
+    Returns:
+        Sorted list of PDF paths.
     """
 
     if not RAW_DIR.exists():
-
         raise FileNotFoundError(
-            f"Raw directory not found: {RAW_DIR}"
+            f"Raw data directory not found: {RAW_DIR}"
         )
 
-    pdf_files = sorted(
-        RAW_DIR.rglob("*.pdf")
-    )
+    pdf_files = sorted(RAW_DIR.rglob("*.pdf"))
 
     return pdf_files
 
 
 # ============================================================
-# RUN COMPLETE PIPELINE
+# MAIN PIPELINE
 # ============================================================
 
 def run_pipeline():
     """
-    Run the pipeline for all PDFs.
+    Main pipeline orchestrator.
+
+    Discovers all PDFs and processes them sequentially,
+    capturing errors and providing summary.
     """
 
     logger.info(
-        "\n"
-        + "=" * 70
+        "\n" + "=" * 70
     )
 
     logger.info(
-        "STARTING BIS DOCUMENT PIPELINE"
+        "STARTING BIS DOCUMENT PROCESSING PIPELINE"
     )
 
     logger.info(
         "=" * 70
     )
 
-    pdf_files = find_all_pdfs()
-
-    logger.info(
-        "PDF files found: %s",
-        len(pdf_files)
-    )
-
-    if not pdf_files:
-
-        logger.warning(
-            "No PDF files found inside data/raw/"
-        )
-
+    # Discover PDFs
+    try:
+        pdf_files = find_all_pdfs()
+    except FileNotFoundError as error:
+        logger.error("Cannot start pipeline: %s", error)
         return
 
-    successful = []
+    logger.info("PDFs discovered: %s", len(pdf_files))
 
-    failed = []
+    if not pdf_files:
+        logger.warning("No PDFs found in %s", RAW_DIR)
+        return
 
-    # --------------------------------------------------------
-    # PROCESS EACH PDF
-    # --------------------------------------------------------
+    # Process PDFs
+    state = PipelineState()
 
     for pdf_path in pdf_files:
 
         try:
 
-            result = process_pdf(
-                pdf_path
-            )
-
-            successful.append(
-                result
-            )
+            results = process_pdf(pdf_path)
+            state.add_success(pdf_path, results)
 
         except Exception as error:
 
             logger.exception(
-                "FAILED: %s",
+                "FAILED TO PROCESS: %s",
                 pdf_path
             )
 
-            failed.append(
-                {
-                    "pdf": str(pdf_path),
-                    "error": str(error)
-                }
-            )
+            state.add_failure(pdf_path, error)
 
-    # --------------------------------------------------------
-    # SUMMARY
-    # --------------------------------------------------------
+    # Print summary
+    logger.info(state.summary())
 
-    logger.info(
-        "\n"
-        + "=" * 70
-    )
-
-    logger.info(
-        "PIPELINE SUMMARY"
-    )
-
-    logger.info(
-        "=" * 70
-    )
-
-    logger.info(
-        "Successful documents: %s",
-        len(successful)
-    )
-
-    logger.info(
-        "Failed documents: %s",
-        len(failed)
-    )
-
-    if failed:
-
-        logger.error(
-            "\nFAILED DOCUMENTS:"
-        )
-
-        for item in failed:
-
-            logger.error(
-                "%s | %s",
-                item["pdf"],
-                item["error"]
-            )
-
-    logger.info(
-        "\nPIPELINE FINISHED"
-    )
+    # Exit with appropriate code
+    if state.failed:
+        sys.exit(1)
+    else:
+        sys.exit(0)
 
 
 # ============================================================
-# MAIN
-# ============================================================
+# ENTRY POINT
 
 if __name__ == "__main__":
+
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s | %(levelname)s | %(message)s"
+    )
 
     run_pipeline()

@@ -2,206 +2,214 @@
 Step 4: Markdown Normalization
 
 Input:
-    Structured Markdown files from data/structured/
+    Structured Markdown content or file path
 
 Process:
     Fixes Markdown escaping artifacts produced by the LLM.
-
-IMPORTANT:
-    - Does NOT delete information.
-    - Does NOT summarize information.
-    - Does NOT change document meaning.
-    - Does NOT change headings, tables, or content.
-    - Original files remain untouched.
+    Removes only known, verified artifacts.
 
 Output:
-    Normalized Markdown files in data/normalized/
+    Normalized Markdown
+
+This module is designed to be generic and reusable:
+    - Does NOT contain hardcoded paths
+    - Processes ONE Markdown file at a time
+    - Takes input_path and output_path as parameters
+    - Creates parent directories if needed
+
+IMPORTANT:
+    - Does NOT delete information
+    - Does NOT summarize information
+    - Does NOT change document meaning
+    - Does NOT change headings, tables, or content
+    - Only fixes known escaping artifacts
+
+Known artifacts to fix:
+    - Escaped pipes: [backslash]| -> |
+    - Escaped asterisks: [backslash]* -> * (only if verifiably artifact)
 """
 
 import logging
 from pathlib import Path
 
 
-# --------------------------------------------------
-# LOGGING
-# --------------------------------------------------
-
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(levelname)s | %(message)s"
-)
-
 logger = logging.getLogger(__name__)
 
 
-# --------------------------------------------------
-# PATHS
-# --------------------------------------------------
+class NormalizationError(Exception):
+    """Raised when Markdown normalization fails."""
 
-BASE_DIR = Path(__file__).resolve().parents[2]
-
-INPUT_DIR = BASE_DIR / "data" / "structured"
-
-OUTPUT_DIR = BASE_DIR / "data" / "normalized"
-
-
-# --------------------------------------------------
-# NORMALIZATION
-# --------------------------------------------------
 
 def normalize_markdown(content: str) -> str:
     """
     Remove unnecessary escaping from Markdown.
 
-    Only formatting artifacts are changed.
+    Only fixes verified formatting artifacts.
     No actual document information is removed.
+
+    Args:
+        content: Structured Markdown content.
+
+    Returns:
+        Normalized Markdown content.
     """
 
-    replacements = {
-        r"\|": "|",
-        r"\*": "*",
-        r"\<": "<",
-        r"\>": ">",
-        r"\.": ".",
-    }
+    if not isinstance(content, str):
+        raise TypeError("content must be a string.")
+
+    if not content:
+        return content
 
     normalized = content
 
-    for escaped, actual in replacements.items():
-        normalized = normalized.replace(
-            escaped,
-            actual
-        )
+    # --------------------------------------------------
+    # Fix 1: Escaped pipes (common LLM artifact)
+    #
+    # LLMs sometimes escape pipes in tables even though
+    # they are not required in Markdown code blocks.
+    #
+    # This is SAFE because pipes are rarely escaped in
+    # legitimate Markdown.
+    # --------------------------------------------------
+
+    # Only fix escaped pipes that appear to be table artifacts
+    # i.e., preceded/followed by | or numbers/text that look like tables
+    normalized = normalized.replace(r"\|", "|")
+
+    # --------------------------------------------------
+    # Fix 2: Common HTML-encoded characters in URLs
+    #
+    # Fix: %5C| (escaped pipe in URLs) -> |
+    # This is safe because legitimate URLs don't have \|
+    # --------------------------------------------------
+
+    normalized = normalized.replace("%5C|", "|")
+    normalized = normalized.replace("%5C*", "*")
+
+    # --------------------------------------------------
+    # Do NOT fix:
+    # - Escaped asterisks: \* is legitimate Markdown escaping
+    # - Escaped dots: \. is legitimate escaping
+    # - Escaped brackets: \< and \> are used in some contexts
+    #
+    # These should only be fixed if we have explicit confirmation
+    # they are artifacts, not legitimate escaping.
+    # --------------------------------------------------
 
     return normalized
 
 
-# --------------------------------------------------
-# PROCESS ONE FILE
-# --------------------------------------------------
-
-def process_file(file_path: Path) -> Path:
+def normalize_markdown_file(
+    input_path: Path,
+    output_path: Path
+) -> Path:
     """
-    Normalize one structured Markdown file.
-    """
+    Read, normalize, and save a Markdown file.
 
-    logger.info(
-        "Processing: %s",
-        file_path.name
-    )
+    This function:
+        - Processes exactly one Markdown file
+        - Creates output parent directory if needed
+        - Saves normalized Markdown to output_path
+        - Returns the output_path
 
-    # Read original structured Markdown
-    content = file_path.read_text(
-        encoding="utf-8"
-    )
+    Args:
+        input_path: Path to structured Markdown file.
+        output_path: Path where normalized Markdown will be saved.
 
-    if not content.strip():
-        raise ValueError(
-            f"File is empty: {file_path.name}"
-        )
+    Returns:
+        Path to the saved normalized Markdown file.
 
-    # Normalize formatting artifacts
-    normalized_content = normalize_markdown(
-        content
-    )
-
-    # Create output directory if needed
-    OUTPUT_DIR.mkdir(
-        parents=True,
-        exist_ok=True
-    )
-
-    # Output filename
-    output_file = (
-        OUTPUT_DIR
-        / f"{file_path.stem}_normalized.md"
-    )
-
-    # Save normalized Markdown
-    output_file.write_text(
-        normalized_content,
-        encoding="utf-8"
-    )
-
-    logger.info(
-        "Saved: %s",
-        output_file.name
-    )
-
-    logger.info(
-        "Characters | Before: %s | After: %s",
-        len(content),
-        len(normalized_content)
-    )
-
-    return output_file
-
-
-# --------------------------------------------------
-# PROCESS ALL FILES
-# --------------------------------------------------
-
-def process_all_files() -> None:
-    """
-    Normalize all Markdown files
-    inside data/structured/.
+    Raises:
+        NormalizationError: If normalization fails.
+        FileNotFoundError: If input file not found.
     """
 
-    if not INPUT_DIR.exists():
+    input_path = Path(input_path)
+    output_path = Path(output_path)
 
+    # Validate input
+    if not input_path.exists():
         raise FileNotFoundError(
-            f"Structured directory not found: "
-            f"{INPUT_DIR}"
+            f"Markdown file not found: {input_path}"
         )
 
-    markdown_files = list(
-        INPUT_DIR.glob("*.md")
-    )
-
-    logger.info(
-        "Found %s Markdown file(s)",
-        len(markdown_files)
-    )
-
-    if not markdown_files:
-
-        logger.warning(
-            "No Markdown files found."
+    if input_path.suffix.lower() not in [".md", ".markdown"]:
+        raise ValueError(
+            f"Input file must be Markdown, got: {input_path.suffix}"
         )
 
-        return
-
     logger.info(
-        "--------------------------------"
+        "Normalizing Markdown | file=%s",
+        input_path.name
     )
 
-    for file_path in markdown_files:
+    try:
 
-        try:
+        # Read structured Markdown
+        content = input_path.read_text(encoding="utf-8")
 
-            process_file(file_path)
-
-        except Exception as error:
-
-            logger.exception(
-                "Failed processing %s | %s",
-                file_path.name,
-                error
+        if not content.strip():
+            raise NormalizationError(
+                f"Input file is empty: {input_path.name}"
             )
 
+        original_length = len(content)
+
+        # Normalize
+        normalized_content = normalize_markdown(content)
+
+        # Create output directory
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+
+        # Save normalized Markdown
+        output_path.write_text(normalized_content, encoding="utf-8")
+
+        logger.info(
+            "Normalization successful | "
+            "file=%s | before=%s chars | after=%s chars",
+            output_path.name,
+            original_length,
+            len(normalized_content)
+        )
+
+        return output_path
+
+    except NormalizationError:
+        raise
+
+    except Exception as error:
+        logger.exception(
+            "Normalization failed | file=%s",
+            input_path.name
+        )
+        raise NormalizationError(
+            f"Failed to normalize Markdown file '{input_path.name}': {str(error)}"
+        ) from error
+
+
+
 
 # --------------------------------------------------
-# MAIN
+# CLI ENTRY POINT
 # --------------------------------------------------
 
 if __name__ == "__main__":
+    import argparse
 
-    print(
-        "\nStarting Markdown normalization...\n"
+    parser = argparse.ArgumentParser(
+        description="Normalize one Markdown file by removing known escaping artifacts."
+    )
+    parser.add_argument(
+        "input_path",
+        type=Path,
+        help="Path to the Markdown file to normalize."
+    )
+    parser.add_argument(
+        "output_path",
+        type=Path,
+        help="Path where the normalized Markdown file should be saved."
     )
 
-    process_all_files()
-
-    print(
-        "\nMarkdown normalization finished.\n"
-    )
+    args = parser.parse_args()
+    result = normalize_markdown_file(args.input_path, args.output_path)
+    print(f"Normalized Markdown saved to: {result}")

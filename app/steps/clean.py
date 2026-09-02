@@ -2,17 +2,20 @@
 Step 2: Lossless Markdown Cleaning
 
 Input:
-    Raw Markdown extracted by Docling.
+    Raw Markdown extracted by Docling
 
 Process:
     Performs ONLY safe formatting cleanup.
+    Preserves all document information.
 
-IMPORTANT:
-    This step must NOT delete, summarize, deduplicate,
-    reconstruct, merge, infer, or modify document meaning.
+Output:
+    Cleaned Markdown
 
-    Every piece of textual information must remain available
-    for the AI structuring step.
+This module is designed to be generic and reusable:
+    - Does NOT contain hardcoded paths
+    - Processes ONE Markdown file at a time
+    - Takes input_path and output_path as parameters
+    - Creates parent directories if needed
 
 Safe operations:
     - Decode HTML entities
@@ -52,7 +55,6 @@ def clean_markdown(markdown: str) -> str:
     """
     Perform lossless formatting cleanup on Markdown.
 
-    IMPORTANT:
     This function preserves all document information.
 
     Args:
@@ -63,9 +65,7 @@ def clean_markdown(markdown: str) -> str:
     """
 
     if not isinstance(markdown, str):
-        raise TypeError(
-            "markdown must be a string."
-        )
+        raise TypeError("markdown must be a string.")
 
     if not markdown:
         return markdown
@@ -78,8 +78,6 @@ def clean_markdown(markdown: str) -> str:
     # Windows: \r\n
     # Old Mac: \r
     # Unix:    \n
-    #
-    # Information is unchanged.
     # --------------------------------------------------
 
     cleaned = markdown.replace("\r\n", "\n")
@@ -88,11 +86,7 @@ def clean_markdown(markdown: str) -> str:
     # --------------------------------------------------
     # 2. Decode HTML entities
     #
-    # Example:
-    # &amp; -> &
-    # &nbsp; -> non-breaking space
-    #
-    # This preserves the actual textual meaning.
+    # Example: &amp; -> &, &nbsp; -> non-breaking space
     # --------------------------------------------------
 
     cleaned = html.unescape(cleaned)
@@ -100,9 +94,7 @@ def clean_markdown(markdown: str) -> str:
     # --------------------------------------------------
     # 3. Normalize special spaces
     #
-    # These characters visually represent spaces but can
-    # interfere with parsing and embedding.
-    #
+    # Replace Unicode space variants with regular spaces.
     # No words or information are removed.
     # --------------------------------------------------
 
@@ -130,9 +122,8 @@ def clean_markdown(markdown: str) -> str:
     # --------------------------------------------------
     # 4. Remove zero-width formatting characters
     #
-    # These are invisible formatting artifacts.
-    #
-    # They do not represent actual document information.
+    # These are invisible formatting artifacts
+    # that do not represent document information.
     # --------------------------------------------------
 
     zero_width_chars = [
@@ -146,45 +137,25 @@ def clean_markdown(markdown: str) -> str:
         cleaned = cleaned.replace(char, "")
 
     # --------------------------------------------------
-    # 5. Remove trailing whitespace ONLY
+    # 5. Remove trailing whitespace
     #
-    # Example:
-    #
-    # "Hello      \n"
-    #
-    # becomes:
-    #
-    # "Hello\n"
-    #
-    # Internal spaces are NOT touched.
-    # Table structure is NOT changed.
+    # Removes trailing spaces/tabs from each line.
+    # Internal spaces and table structure are preserved.
     # --------------------------------------------------
 
     lines = cleaned.split("\n")
-
-    cleaned_lines = [
-        line.rstrip()
-        for line in lines
-    ]
-
+    cleaned_lines = [line.rstrip() for line in lines]
     cleaned = "\n".join(cleaned_lines)
 
     # --------------------------------------------------
     # 6. Limit excessive consecutive blank lines
     #
-    # Important:
-    # We preserve paragraph separation.
-    #
-    # 3+ blank lines -> 2 blank lines
-    #
+    # Replace 4+ blank lines with 3 blank lines.
+    # Paragraph separation is preserved.
     # No textual content is removed.
     # --------------------------------------------------
 
-    cleaned = re.sub(
-        r"\n{4,}",
-        "\n\n\n",
-        cleaned
-    )
+    cleaned = re.sub(r"\n{4,}", "\n\n\n", cleaned)
 
     # --------------------------------------------------
     # Final validation
@@ -206,28 +177,35 @@ def clean_markdown(markdown: str) -> str:
 
 
 def clean_markdown_file(
-    input_path: str,
-    output_path: str,
+    input_path: Path,
+    output_path: Path
 ) -> Dict[str, Any]:
     """
-    Read a Markdown file, clean it safely,
-    and save the result.
+    Read a Markdown file, clean it safely, and save the result.
+
+    This function:
+        - Processes exactly one Markdown file
+        - Creates output parent directory if needed
+        - Saves cleaned Markdown to output_path
+        - Returns metadata about the cleaning
 
     Args:
         input_path: Path to raw Markdown file.
-        output_path: Path for cleaned Markdown file.
+        output_path: Path where cleaned Markdown will be saved.
 
     Returns:
         Dictionary containing cleaning metadata.
+
+    Raises:
+        MarkdownCleaningError: If cleaning fails.
+        FileNotFoundError: If input file not found.
+        ValueError: If input file is not Markdown.
     """
 
     input_file = Path(input_path)
     output_file = Path(output_path)
 
-    # --------------------------------------------------
     # Validate input
-    # --------------------------------------------------
-
     if not input_file.exists():
         raise FileNotFoundError(
             f"Markdown file not found: {input_file}"
@@ -235,7 +213,7 @@ def clean_markdown_file(
 
     if input_file.suffix.lower() not in [".md", ".markdown"]:
         raise ValueError(
-            "Input file must be a Markdown file."
+            f"Input file must be Markdown, got: {input_file.suffix}"
         )
 
     logger.info(
@@ -245,108 +223,45 @@ def clean_markdown_file(
 
     try:
 
-        # --------------------------------------------------
         # Read original Markdown
-        # --------------------------------------------------
-
-        raw_markdown = input_file.read_text(
-            encoding="utf-8"
-        )
-
+        raw_markdown = input_file.read_text(encoding="utf-8")
         original_characters = len(raw_markdown)
 
-        # --------------------------------------------------
         # Clean
-        # --------------------------------------------------
+        cleaned_markdown = clean_markdown(raw_markdown)
 
-        cleaned_markdown = clean_markdown(
-            raw_markdown
-        )
-
-        # --------------------------------------------------
         # Create output directory
-        # --------------------------------------------------
+        output_file.parent.mkdir(parents=True, exist_ok=True)
 
-        output_file.parent.mkdir(
-            parents=True,
-            exist_ok=True
-        )
-
-        # --------------------------------------------------
         # Save cleaned Markdown
-        # --------------------------------------------------
-
-        output_file.write_text(
-            cleaned_markdown,
-            encoding="utf-8"
-        )
+        output_file.write_text(cleaned_markdown, encoding="utf-8")
 
         logger.info(
             "Cleaned Markdown saved | path=%s",
-            output_file,
+            output_file.name,
         )
 
         return {
             "status": "success",
-            "input_file": str(
-                input_file.resolve()
-            ),
-            "output_file": str(
-                output_file.resolve()
-            ),
-            "original_character_count": (
-                original_characters
-            ),
-            "cleaned_character_count": len(
-                cleaned_markdown
-            ),
-            "character_difference": (
-                len(cleaned_markdown)
-                - original_characters
-            ),
+            "input_file": str(input_file.resolve()),
+            "output_file": str(output_file.resolve()),
+            "original_character_count": original_characters,
+            "cleaned_character_count": len(cleaned_markdown),
+            "character_difference": len(cleaned_markdown) - original_characters,
         }
 
     except MarkdownCleaningError:
         raise
 
     except Exception as error:
-
         logger.exception(
             "Markdown cleaning failed | file=%s",
             input_file.name,
         )
-
         raise MarkdownCleaningError(
-            f"Failed to clean Markdown file "
-            f"'{input_file.name}': {str(error)}"
+            f"Failed to clean Markdown file '{input_file.name}': {str(error)}"
         ) from error
 
-
-# --------------------------------------------------
-# Local test
-# --------------------------------------------------
-
-if __name__ == "__main__":
-
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(levelname)s | %(message)s",
-    )
-
-    print("\nStarting lossless Markdown cleaning...\n")
-
-    result = clean_markdown_file(
-        input_path=(
-            "data/markdown/"
-            "Product-Manual-30551-V2.md"
-        ),
-        output_path=(
-            "data/cleaned/"
-            "Product-Manual-30551-V2_cleaned.md"
-        ),
-    )
-
-    print("Cleaning successful!\n")
 
     print(
         f"Original characters: "
