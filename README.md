@@ -1,66 +1,92 @@
-# bis-rag-engine
+# BIS Metadata Discovery Engine
 
-A modular document ingestion and retrieval pipeline built for structured document processing, chunking, embedding, and retrieval augmented generation.
+This project implements the first milestone of the BIS GPT architecture: a metadata-first crawler and PostgreSQL document registry.
+
+## Milestone 1 goals
+
+- Discover BIS pages and document links
+- Normalize and deduplicate URLs
+- Store source, page, and document metadata in PostgreSQL
+- Provide a minimal API for listing and checking documents
+- Keep the crawler intentionally metadata-focused; no mass PDF download or embedding yet
 
 ## Project structure
 
 ```text
 bis-rag-engine/
 ├── app/
-│   ├── main.py
-│   ├── config.py
-│   ├── models.py
 │   ├── api/
-│   │   ├── upload.py
-│   │   ├── query.py
-│   │   └── status.py
-│   ├── workflows/
-│   │   ├── __init__.py
-│   │   ├── document_ingestion.py
-│   │   └── events.py
-│   ├── steps/
-│   │   ├── __init__.py
-│   │   ├── extract.py
-│   │   ├── clean.py
-│   │   ├── structure.py
-│   │   ├── validate.py
-│   │   ├── chunk.py
-│   │   ├── embed.py
-│   │   └── store.py
-│   ├── agents/
-│   │   ├── __init__.py
-│   │   └── document_structuring_agent.py
-│   ├── prompts/
-│   │   ├── __init__.py
-│   │   └── document_structure_prompt.py
-│   ├── rag/
-│   │   ├── retriever.py
-│   │   ├── reranker.py
-│   │   └── generator.py
-│   └── database/
-│       ├── postgres.py
-│       └── vector_store.py
-├── data/
-│   ├── raw/
-│   ├── markdown/
-│   ├── structured/
-│   └── chunks/
+│   ├── config.py
+│   ├── crawler/
+│   │   ├── crawler.py
+│   │   ├── metadata.py
+│   │   └── __init__.py
+│   ├── database/
+│   │   ├── models.py
+│   │   ├── session.py
+│   │   └── __init__.py
+│   ├── main.py
+│   └── __init__.py
+├── scripts/
+│   └── crawl_bis.py
 ├── tests/
-│   ├── test_ingestion.py
-│   ├── test_structuring.py
-│   └── test_rag.py
+│   └── test_ingestion.py
+├── .env.example
+├── docker-compose.yml
+├── docker/
+│   └── Dockerfile
 ├── requirements.txt
-├── .env
 └── README.md
 ```
 
-## Getting started
+## Setup
 
-1. Create and activate a virtual environment.
-2. Install dependencies from `requirements.txt`.
-3. Configure environment variables in `.env`.
-4. Run the application through `app/main.py`.
+1. Create a virtual environment.
+2. Copy `.env.example` to `.env` and adjust values for your environment.
+3. Start PostgreSQL locally or via Docker Compose.
+4. Run database initialization with the app startup or directly via the app.
+5. Execute the crawl entrypoint:
 
-## Notes
+```bash
+python scripts/crawl_bis.py
+```
 
-This scaffold is intentionally modular so each pipeline stage can be developed independently and plugged into the main orchestration flow.
+## Crawl behavior
+
+The crawler currently:
+
+- starts from the configured BIS base URL
+- fetches internal pages
+- extracts internal links
+- identifies PDF or document candidates
+- normalizes and deduplicates URLs
+- stores basic page and document metadata in PostgreSQL
+
+It is intentionally limited to metadata discovery, not full document processing.
+
+## Database schema
+
+Key tables include:
+
+- `sources`
+- `pages`
+- `documents`
+- `document_versions`
+- `document_relationships`
+
+These are created automatically through SQLAlchemy metadata creation when the app starts.
+
+## API
+
+The app exposes basic endpoints for:
+
+- `GET /health`
+- `GET /api/v1/documents`
+- `GET /api/v1/documents/{id}`
+- `GET /api/v1/documents/{id}/status`
+- `POST /api/v1/crawl`
+- `POST /api/v1/documents/{id}/process`
+
+## Next milestone
+
+After verification of the metadata layer, the recommended next step is Milestone 2: document download, Docling extraction, quality checks, and structured parsing for a small set of representative BIS documents.

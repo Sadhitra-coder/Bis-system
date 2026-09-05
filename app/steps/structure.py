@@ -2,11 +2,9 @@
 structure.py
 
 LOSSLESS GENERIC DOCUMENT STRUCTURING
-=====================================
 
-PHILOSOPHY
-----------
-
+Architecture
+------------
 Python determines:
     - document boundaries
     - paragraphs
@@ -20,12 +18,10 @@ LLM determines:
     - semantic heading hierarchy
     - semantic section organization
 
-IMPORTANT:
-----------
+IMPORTANT
+---------
 The LLM NEVER rewrites document content.
-
 The LLM NEVER returns the document text.
-
 The LLM ONLY returns decisions about Python-created blocks.
 
 Therefore:
@@ -35,40 +31,14 @@ Therefore:
     LLM semantic decisions
             +
     Lossless validation
-
-= robust generic document structuring
-
-
-USAGE
------
-
-    python structure.py input.md output.json
-
-
-ENVIRONMENT
------------
-
-Project root .env:
-
-    GROQ_API_KEY=your_key
-    GROQ_MODEL=openai/gpt-oss-120b
-
-Optional:
-
-    LLM_ENABLED=true
-
-
-INSTALL
--------
-
-    pip install groq python-dotenv
+            =
+    Robust generic document structuring
 """
 
 import json
 import os
 import re
 import sys
-
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -80,9 +50,7 @@ from dotenv import load_dotenv
 # ============================================================
 
 DEFAULT_MODEL = "openai/gpt-oss-120b"
-
 DEFAULT_BATCH_SIZE = 20
-
 MAX_LLM_OUTPUT_TOKENS = 8000
 
 
@@ -93,11 +61,6 @@ MAX_LLM_OUTPUT_TOKENS = 8000
 def find_project_root(start_path: Optional[Path] = None) -> Path:
     """
     Find the project root by searching upward for .env.
-
-    This allows structure.py to work even when executed from
-    a subdirectory such as:
-
-        scripts/structure.py
     """
 
     if start_path is None:
@@ -106,7 +69,6 @@ def find_project_root(start_path: Optional[Path] = None) -> Path:
     current = start_path.parent
 
     while True:
-
         env_path = current / ".env"
 
         if env_path.exists():
@@ -121,7 +83,6 @@ def find_project_root(start_path: Optional[Path] = None) -> Path:
 
 
 PROJECT_ROOT = find_project_root()
-
 ENV_PATH = PROJECT_ROOT / ".env"
 
 if ENV_PATH.exists():
@@ -165,6 +126,7 @@ def normalize_whitespace(text: str) -> str:
     text = text.replace("\u00a0", " ")
     text = text.replace("\u200b", "")
 
+    # FIXED: valid regex
     text = re.sub(
         r"[ \t]+",
         " ",
@@ -185,6 +147,7 @@ def normalize_cell(cell: str) -> str:
     cell = cell.replace("\u00a0", " ")
     cell = cell.replace("\u200b", "")
 
+    # FIXED
     cell = re.sub(
         r"[ \t]+",
         " ",
@@ -231,7 +194,6 @@ def are_duplicates(
     """
 
     a_normalized = normalize_for_comparison(a)
-
     b_normalized = normalize_for_comparison(b)
 
     if not a_normalized:
@@ -248,16 +210,6 @@ def deduplicate_adjacent_cells(
 ) -> List[str]:
     """
     Remove ONLY adjacent duplicate cells.
-
-    Example:
-
-        ["Type", "Type", "Bearing"]
-
-    becomes:
-
-        ["Type", "Bearing"]
-
-    Non-adjacent duplicates are preserved.
     """
 
     if not cells:
@@ -266,7 +218,6 @@ def deduplicate_adjacent_cells(
     result = []
 
     for cell in cells:
-
         cell = normalize_cell(cell)
 
         if not result:
@@ -322,11 +273,6 @@ def is_table_separator(
 ) -> bool:
     """
     Detect markdown table separator.
-
-    Example:
-
-        |------|------|
-        | :--- | ---: |
     """
 
     stripped = line.strip()
@@ -335,7 +281,6 @@ def is_table_separator(
         return False
 
     candidate = stripped
-
     candidate = candidate.replace("|", "")
     candidate = candidate.replace(":", "")
     candidate = candidate.replace("-", "")
@@ -403,16 +348,6 @@ def clean_table_rows(
 ) -> List[List[str]]:
     """
     Clean rows WITHOUT forcing rectangular structure.
-
-    This is important because PDFs may contain:
-
-        - merged cells
-        - broken columns
-        - row spans
-        - extraction artifacts
-
-    Information is never discarded simply because a row
-    has a different number of columns.
     """
 
     cleaned_rows = []
@@ -461,7 +396,6 @@ def deduplicate_adjacent_rows(
         return []
 
     result = []
-
     previous_signature = None
 
     for row in rows:
@@ -512,11 +446,9 @@ def get_markdown_heading_level(
     Return markdown heading level.
 
     Example:
-
         ### Title
 
     returns:
-
         3
     """
 
@@ -537,14 +469,8 @@ def looks_like_heading_candidate(
     """
     Conservative Python heading candidate detection.
 
-    IMPORTANT:
-
-    Python is NOT deciding that something is definitely
-    a heading.
-
-    Python is only creating candidates.
-
-    The LLM will make the semantic decision.
+    Python only creates candidates.
+    The LLM makes the semantic decision.
     """
 
     text = normalize_whitespace(text)
@@ -555,7 +481,9 @@ def looks_like_heading_candidate(
     if len(text) > 180:
         return False
 
-    # Markdown-like section markers.
+    # --------------------------------------------------------
+    # ANNEX / APPENDIX / SECTION / CHAPTER / PART
+    # --------------------------------------------------------
 
     if re.match(
         r"^(ANNEX|APPENDIX|SECTION|CHAPTER|PART)\b",
@@ -564,7 +492,14 @@ def looks_like_heading_candidate(
     ):
         return True
 
-    # Numbered structures.
+    # --------------------------------------------------------
+    # NUMBERED STRUCTURES
+    #
+    # Examples:
+    # 1 Introduction
+    # 1.1 Scope
+    # 1.1.1 Definitions
+    # --------------------------------------------------------
 
     if re.match(
         r"^\d+(?:\.\d+)*\.?\s+[A-Za-z]",
@@ -572,7 +507,12 @@ def looks_like_heading_candidate(
     ):
         return True
 
-    # Lettered structures.
+    # --------------------------------------------------------
+    # LETTERED STRUCTURES
+    #
+    # Example:
+    # A. General
+    # --------------------------------------------------------
 
     if re.match(
         r"^[A-Z]\.\s+[A-Za-z]",
@@ -580,7 +520,13 @@ def looks_like_heading_candidate(
     ):
         return True
 
-    # Roman numerals.
+    # --------------------------------------------------------
+    # ROMAN NUMERALS
+    #
+    # Example:
+    # I. Introduction
+    # II. Scope
+    # --------------------------------------------------------
 
     if re.match(
         r"^[IVXLCDM]+\.\s+[A-Za-z]",
@@ -589,7 +535,9 @@ def looks_like_heading_candidate(
     ):
         return True
 
-    # Short uppercase text.
+    # --------------------------------------------------------
+    # SHORT UPPERCASE TEXT
+    # --------------------------------------------------------
 
     letters = re.sub(
         r"[^A-Za-z]",
@@ -615,22 +563,25 @@ def infer_python_heading_level(
     Python provisional level.
 
     The LLM may override this.
-
-    Used as fallback when LLM is unavailable.
     """
 
     text = normalize_whitespace(text)
 
     match = re.match(
-        r"^(\d+(?:\.\d+)*)\.?\s+",
+        r"^(\d+(?:\.\d+)*\.?)\s+",
         text
     )
 
     if match:
+        numbering = match.group(1).rstrip(".")
 
-        numbering = match.group(1)
+        if "." in numbering:
+            return min(
+                numbering.count(".") + 1,
+                4
+            )
 
-        return numbering.count(".") + 1
+        return 1
 
     if re.match(
         r"^(ANNEX|APPENDIX)\b",
@@ -712,8 +663,6 @@ def create_table_block(
     Create table block.
 
     Both structured rows AND raw extracted lines are kept.
-
-    Raw lines guarantee preservation.
     """
 
     cleaned_rows = clean_table_rows(rows)
@@ -753,13 +702,10 @@ def parse_blocks(
     """
     Python determines document boundaries.
 
-    Output blocks are:
-
+    Output blocks:
         - heading
         - paragraph
         - table
-
-    Nothing is semantically rewritten here.
     """
 
     lines = text.splitlines()
@@ -769,22 +715,18 @@ def parse_blocks(
     paragraph_buffer: List[str] = []
 
     table_rows: List[List[str]] = []
-
     table_raw_lines: List[str] = []
 
     in_table = False
 
     block_counter = 0
 
-
     def next_id() -> str:
-
         nonlocal block_counter
 
         block_counter += 1
 
         return f"block_{block_counter:05d}"
-
 
     def flush_paragraph():
 
@@ -800,9 +742,7 @@ def parse_blocks(
         )
 
         if not candidate_text:
-
             paragraph_buffer = []
-
             return
 
         heading_candidate = (
@@ -822,7 +762,6 @@ def parse_blocks(
 
         paragraph_buffer = []
 
-
     def flush_table():
 
         nonlocal table_rows
@@ -830,9 +769,7 @@ def parse_blocks(
         nonlocal in_table
 
         if not table_rows and not table_raw_lines:
-
             in_table = False
-
             return
 
         block = create_table_block(
@@ -844,18 +781,15 @@ def parse_blocks(
         blocks.append(block)
 
         table_rows = []
-
         table_raw_lines = []
 
         in_table = False
-
 
     for raw_line in lines:
 
         line = raw_line.rstrip("\n")
 
         stripped = line.strip()
-
 
         # ----------------------------------------------------
         # EMPTY LINE
@@ -870,7 +804,6 @@ def parse_blocks(
 
             continue
 
-
         # ----------------------------------------------------
         # MARKDOWN TABLE
         # ----------------------------------------------------
@@ -881,23 +814,16 @@ def parse_blocks(
 
             in_table = True
 
-            table_raw_lines.append(
-                line
-            )
+            table_raw_lines.append(line)
 
             if not is_table_separator(stripped):
 
-                row = split_table_row(
-                    stripped
-                )
+                row = split_table_row(stripped)
 
                 if row:
-                    table_rows.append(
-                        row
-                    )
+                    table_rows.append(row)
 
             continue
-
 
         # ----------------------------------------------------
         # NON-TABLE AFTER TABLE
@@ -906,25 +832,20 @@ def parse_blocks(
         if in_table:
             flush_table()
 
-
         # ----------------------------------------------------
         # MARKDOWN HEADING
         # ----------------------------------------------------
 
-        markdown_level = (
-            get_markdown_heading_level(
-                stripped
-            )
+        markdown_level = get_markdown_heading_level(
+            stripped
         )
 
         if markdown_level is not None:
 
             flush_paragraph()
 
-            heading_text = (
-                strip_markdown_heading(
-                    stripped
-                )
+            heading_text = strip_markdown_heading(
+                stripped
             )
 
             blocks.append(
@@ -937,34 +858,24 @@ def parse_blocks(
 
             continue
 
-
         # ----------------------------------------------------
         # NORMAL CONTENT
         # ----------------------------------------------------
-
-        # If a single line strongly looks like a heading,
-        # isolate it as its own paragraph candidate.
 
         if (
             looks_like_heading_candidate(stripped)
             and not paragraph_buffer
         ):
 
-            paragraph_buffer.append(
-                line
-            )
+            paragraph_buffer.append(line)
 
             flush_paragraph()
 
             continue
 
+        paragraph_buffer.append(line)
 
-        paragraph_buffer.append(
-            line
-        )
-
-
-    # Final flush.
+    # Final flush
 
     if in_table:
         flush_table()
@@ -983,19 +894,16 @@ def initialize_llm():
     Initialize Groq client.
 
     Returns:
-
         client, error_message
     """
 
     if not LLM_ENABLED:
-
         return (
             None,
             "LLM disabled by configuration."
         )
 
     if not GROQ_API_KEY:
-
         return (
             None,
             "GROQ_API_KEY not found."
@@ -1032,13 +940,8 @@ def build_llm_prompt(
     """
     Build semantic structuring prompt.
 
-    CRITICAL DESIGN:
-
-    The LLM receives block IDs and text.
-
+    The LLM receives block IDs and structural context.
     It NEVER rewrites content.
-
-    It ONLY classifies the blocks.
     """
 
     llm_blocks = []
@@ -1057,7 +960,6 @@ def build_llm_prompt(
             )
         }
 
-
         if block["type"] in (
             "heading",
             "paragraph"
@@ -1068,12 +970,7 @@ def build_llm_prompt(
                 ""
             )
 
-
         elif block["type"] == "table":
-
-            # We do not ask LLM to reconstruct tables.
-
-            # Give it only structural context.
 
             item["row_count"] = block.get(
                 "row_count",
@@ -1092,18 +989,13 @@ def build_llm_prompt(
                 )[:3]
             )
 
-
-        llm_blocks.append(
-            item
-        )
-
+        llm_blocks.append(item)
 
     blocks_json = json.dumps(
         llm_blocks,
         ensure_ascii=False,
         indent=2
     )
-
 
     prompt = f"""
 You are a DOCUMENT STRUCTURE CLASSIFIER.
@@ -1112,10 +1004,8 @@ Your job is NOT to rewrite a document.
 
 Your job is NOT to summarize a document.
 
-Your job is NOT to extract information into a new schema.
-
-Your ONLY task is to make semantic decisions about already-created
-document blocks.
+Your ONLY task is to make semantic decisions about
+already-created document blocks.
 
 The Python program has already determined all boundaries.
 
@@ -1129,8 +1019,8 @@ Python determines boundaries.
 
 You determine semantic structure.
 
-You MUST NOT change, remove, merge, split, paraphrase, summarize,
-or invent document content.
+You MUST NOT change, remove, merge, split, paraphrase,
+summarize, or invent document content.
 
 ============================================================
 TASK
@@ -1156,7 +1046,7 @@ Level meanings:
 
 Do not create unnecessary deep levels.
 
-Use the numbering and surrounding document context.
+Use numbering and surrounding document context.
 
 ============================================================
 VERY IMPORTANT
@@ -1180,7 +1070,7 @@ NEGATIVE INSTRUCTIONS
 
 DO NOT:
 
-- rewrite any block text
+- rewrite block text
 - summarize text
 - remove information
 - combine blocks
@@ -1202,7 +1092,7 @@ DO NOT:
 
 If uncertain whether a block is a heading:
 
-    KEEP IT AS CONTENT.
+KEEP IT AS CONTENT.
 
 False heading classification is worse than keeping content
 as a paragraph.
@@ -1258,9 +1148,6 @@ def parse_llm_response(
 ) -> Dict[str, Any]:
     """
     Parse JSON returned by LLM.
-
-    Includes fallback extraction in case the model wraps
-    JSON with extra whitespace.
     """
 
     response_text = response_text.strip()
@@ -1273,6 +1160,7 @@ def parse_llm_response(
 
     except json.JSONDecodeError:
 
+        # FIXED regex
         match = re.search(
             r"\{.*\}",
             response_text,
@@ -1280,6 +1168,7 @@ def parse_llm_response(
         )
 
         if not match:
+
             raise ValueError(
                 "LLM did not return valid JSON."
             )
@@ -1300,8 +1189,7 @@ def validate_llm_decisions(
     """
     Strict validation.
 
-    We reject the entire LLM batch if:
-
+    Reject batch if:
         - IDs are missing
         - extra IDs exist
         - IDs are duplicated
@@ -1316,9 +1204,7 @@ def validate_llm_decisions(
             "LLM result is not an object."
         )
 
-
     items = result.get("items")
-
 
     if not isinstance(items, list):
 
@@ -1326,7 +1212,6 @@ def validate_llm_decisions(
             False,
             "LLM result has no valid items list."
         )
-
 
     input_ids = [
         block["id"]
@@ -1339,7 +1224,6 @@ def validate_llm_decisions(
         if isinstance(item, dict)
     ]
 
-
     if len(output_ids) != len(input_ids):
 
         return (
@@ -1347,14 +1231,12 @@ def validate_llm_decisions(
             "LLM returned incorrect number of items."
         )
 
-
     if len(set(output_ids)) != len(output_ids):
 
         return (
             False,
             "LLM returned duplicate IDs."
         )
-
 
     if set(output_ids) != set(input_ids):
 
@@ -1377,13 +1259,11 @@ def validate_llm_decisions(
             )
         )
 
-
     for item in items:
 
         semantic_type = item.get(
             "semantic_type"
         )
-
 
         if semantic_type not in (
             "heading",
@@ -1395,11 +1275,7 @@ def validate_llm_decisions(
                 f"Invalid semantic_type: {semantic_type}"
             )
 
-
-        level = item.get(
-            "level"
-        )
-
+        level = item.get("level")
 
         if semantic_type == "heading":
 
@@ -1414,6 +1290,33 @@ def validate_llm_decisions(
                     f"Invalid heading level: {level}"
                 )
 
+        else:
+
+            if level is not None:
+
+                return (
+                    False,
+                    "Content block must have level=null."
+                )
+
+        confidence = item.get("confidence")
+
+        if not isinstance(
+            confidence,
+            (int, float)
+        ):
+
+            return (
+                False,
+                "Invalid confidence value."
+            )
+
+        if not 0 <= confidence <= 1:
+
+            return (
+                False,
+                f"Invalid confidence: {confidence}"
+            )
 
     return (
         True,
@@ -1431,18 +1334,14 @@ def python_fallback_decisions(
     """
     Safe fallback when LLM fails.
 
-    Python uses conservative candidate detection.
-
     Tables are always content.
     """
 
     decisions = {}
 
-
     for block in batch:
 
         block_id = block["id"]
-
 
         if block["type"] == "heading":
 
@@ -1457,7 +1356,6 @@ def python_fallback_decisions(
             }
 
             continue
-
 
         if (
             block["type"] == "paragraph"
@@ -1479,14 +1377,12 @@ def python_fallback_decisions(
 
             continue
 
-
         decisions[block_id] = {
             "semantic_type": "content",
             "level": None,
             "confidence": 1.0,
             "source": "python"
         }
-
 
     return decisions
 
@@ -1503,17 +1399,9 @@ def semantic_structure(
 ]:
     """
     Perform semantic structure classification.
-
-    Returns:
-
-        decisions_by_id
-        llm_metadata
     """
 
-    client, initialization_error = (
-        initialize_llm()
-    )
-
+    client, initialization_error = initialize_llm()
 
     # --------------------------------------------------------
     # LLM UNAVAILABLE
@@ -1522,23 +1410,13 @@ def semantic_structure(
     if client is None:
 
         print("\nWARNING:")
-        print(
-            "Could not initialize LLM."
-        )
-        print(
-            f"Reason: {initialization_error}"
-        )
-        print(
-            "\nUsing Python fallback."
-        )
+        print("Could not initialize LLM.")
+        print(f"Reason: {initialization_error}")
+        print("\nUsing Python fallback.")
 
-
-        decisions = (
-            python_fallback_decisions(
-                blocks
-            )
+        decisions = python_fallback_decisions(
+            blocks
         )
-
 
         return (
             decisions,
@@ -1550,7 +1428,6 @@ def semantic_structure(
             }
         )
 
-
     # --------------------------------------------------------
     # BATCH PROCESSING
     # --------------------------------------------------------
@@ -1560,11 +1437,8 @@ def semantic_structure(
         Dict[str, Any]
     ] = {}
 
-
     llm_batches_used = 0
-
     fallback_batches = 0
-
 
     for start in range(
         0,
@@ -1577,22 +1451,18 @@ def semantic_structure(
             start + DEFAULT_BATCH_SIZE
         ]
 
-
         batch_number = (
             start // DEFAULT_BATCH_SIZE
         ) + 1
-
 
         print(
             f"\n      LLM batch "
             f"{batch_number}..."
         )
 
-
         prompt = build_llm_prompt(
             batch
         )
-
 
         try:
 
@@ -1622,7 +1492,6 @@ def semantic_structure(
                 )
             )
 
-
             response_text = (
                 completion
                 .choices[0]
@@ -1630,18 +1499,15 @@ def semantic_structure(
                 .content
             )
 
-
             if not response_text:
 
                 raise ValueError(
                     "LLM returned empty content."
                 )
 
-
             parsed = parse_llm_response(
                 response_text
             )
-
 
             valid, reason = (
                 validate_llm_decisions(
@@ -1650,13 +1516,11 @@ def semantic_structure(
                 )
             )
 
-
             if not valid:
 
                 raise ValueError(
                     reason
                 )
-
 
             for item in parsed["items"]:
 
@@ -1675,33 +1539,24 @@ def semantic_structure(
                     "source": "llm"
                 }
 
-
             llm_batches_used += 1
-
 
         except Exception as error:
 
             fallback_batches += 1
 
-
-            print(
-                "\nWARNING:"
-            )
-
+            print("\nWARNING:")
             print(
                 "LLM structuring failed "
                 "for this batch."
             )
-
             print(
                 f"Reason: {error}"
             )
-
             print(
                 "Using Python fallback "
                 "for this batch."
             )
-
 
             fallback = (
                 python_fallback_decisions(
@@ -1709,11 +1564,9 @@ def semantic_structure(
                 )
             )
 
-
             decisions.update(
                 fallback
             )
-
 
     return (
         decisions,
@@ -1744,14 +1597,9 @@ def apply_semantic_decisions(
 ) -> List[Dict[str, Any]]:
     """
     Apply LLM decisions WITHOUT modifying content.
-
-    A paragraph may become a semantic heading.
-
-    Its original text remains unchanged.
     """
 
     structured_blocks = []
-
 
     for block in blocks:
 
@@ -1760,7 +1608,6 @@ def apply_semantic_decisions(
         decision = decisions.get(
             block["id"]
         )
-
 
         if not decision:
 
@@ -1778,7 +1625,6 @@ def apply_semantic_decisions(
                 "source": "default"
             }
 
-
         # Tables always remain tables.
 
         if block["type"] == "table":
@@ -1791,7 +1637,6 @@ def apply_semantic_decisions(
                 "semantic_level"
             ] = None
 
-
         else:
 
             new_block[
@@ -1799,7 +1644,6 @@ def apply_semantic_decisions(
             ] = decision[
                 "semantic_type"
             ]
-
 
             new_block[
                 "semantic_level"
@@ -1811,13 +1655,11 @@ def apply_semantic_decisions(
                 else None
             )
 
-
         new_block[
             "semantic_confidence"
         ] = decision.get(
             "confidence"
         )
-
 
         new_block[
             "semantic_source"
@@ -1825,11 +1667,9 @@ def apply_semantic_decisions(
             "source"
         )
 
-
         structured_blocks.append(
             new_block
         )
-
 
     return structured_blocks
 
@@ -1863,11 +1703,7 @@ def build_document_tree(
     """
     Build hierarchical tree.
 
-    IMPORTANT:
-
-    The tree references the same preserved blocks.
-
-    Content is never removed from the flat block list.
+    The tree references preserved blocks.
     """
 
     root = {
@@ -1877,7 +1713,6 @@ def build_document_tree(
         "children": []
     }
 
-
     stack = [
         {
             "node": root,
@@ -1885,9 +1720,7 @@ def build_document_tree(
         }
     ]
 
-
     for block in blocks:
-
 
         # ----------------------------------------------------
         # SEMANTIC HEADING
@@ -1905,29 +1738,22 @@ def build_document_tree(
             )
 
             if not isinstance(level, int):
-
                 level = 1
 
-
-            section = (
-                create_section_node(
-                    title=block.get(
-                        "text",
-                        ""
-                    ),
-                    level=level,
-                    source_block_id=block["id"]
-                )
+            section = create_section_node(
+                title=block.get(
+                    "text",
+                    ""
+                ),
+                level=level,
+                source_block_id=block["id"]
             )
-
 
             while (
                 len(stack) > 1
                 and stack[-1]["level"] >= level
             ):
-
                 stack.pop()
-
 
             parent = stack[-1]["node"]
 
@@ -1936,7 +1762,6 @@ def build_document_tree(
             ].append(
                 section
             )
-
 
             stack.append(
                 {
@@ -1947,7 +1772,6 @@ def build_document_tree(
 
             continue
 
-
         # ----------------------------------------------------
         # NORMAL CONTENT
         # ----------------------------------------------------
@@ -1956,13 +1780,11 @@ def build_document_tree(
             stack[-1]["node"]
         )
 
-
         current_section[
             "content"
         ].append(
             block["id"]
         )
-
 
     return root
 
@@ -1985,9 +1807,7 @@ def extract_basic_metadata(
         "document_title": None
     }
 
-
     all_text = []
-
 
     for block in blocks:
 
@@ -2002,39 +1822,41 @@ def extract_basic_metadata(
             )
 
             if text:
-                all_text.append(
-                    text
-                )
-
+                all_text.append(text)
 
     joined_text = "\n".join(
         all_text
     )
 
-
     # --------------------------------------------------------
     # BIS / IS NUMBER
     # --------------------------------------------------------
 
-    standard_match = re.search(
-        r"\bIS\s+\d+"
-        r"(?:\s*\([^)]+\))?"
-        r"\s*:\s*\d{4}\b",
-        joined_text,
-        flags=re.IGNORECASE
-    )
+    standard_patterns = [
+        r"\bIS\s+\d+(?::\d{4})?\b",
+        r"\bIS\s+\d+\s*:\s*\d{4}\b",
+        r"\bIS/ISO\s+\d+(?::\d{4})?\b",
+        r"\bIS/IEC\s+\d+(?::\d{4})?\b",
+        r"\bIS\s+\d+\s*\(\s*\d+\s*\)\s*:\s*\d{4}\b",
+    ]
 
+    for pattern in standard_patterns:
 
-    if standard_match:
-
-        metadata[
-            "standard_number"
-        ] = (
-            standard_match
-            .group(0)
-            .strip()
+        standard_match = re.search(
+            pattern,
+            joined_text,
+            flags=re.IGNORECASE
         )
 
+        if standard_match:
+
+            metadata[
+                "standard_number"
+            ] = normalize_whitespace(
+                standard_match.group(0)
+            )
+
+            break
 
     # --------------------------------------------------------
     # DOCUMENT TITLE
@@ -2055,19 +1877,15 @@ def extract_basic_metadata(
                 )
             )
 
-
             if not title:
                 continue
-
 
             if re.match(
                 r"^(ANNEX|APPENDIX|TABLE)\b",
                 title,
                 flags=re.IGNORECASE
             ):
-
                 continue
-
 
             if len(title) >= 8:
 
@@ -2076,7 +1894,6 @@ def extract_basic_metadata(
                 ] = title
 
                 break
-
 
     return metadata
 
@@ -2104,11 +1921,6 @@ def validate_block_preservation(
 ) -> Dict[str, Any]:
     """
     Strong structural preservation validation.
-
-    This validates BLOCK preservation.
-
-    Unlike simple token coverage, this ensures that
-    every original Python block still exists.
     """
 
     original_ids = (
@@ -2123,7 +1935,6 @@ def validate_block_preservation(
         )
     )
 
-
     original_set = set(
         original_ids
     )
@@ -2132,19 +1943,15 @@ def validate_block_preservation(
         structured_ids
     )
 
-
     missing_blocks = sorted(
         original_set - structured_set
     )
-
 
     extra_blocks = sorted(
         structured_set - original_set
     )
 
-
     duplicate_blocks = []
-
 
     for block_id in structured_set:
 
@@ -2153,16 +1960,13 @@ def validate_block_preservation(
                 block_id
             ) > 1
         ):
-
             duplicate_blocks.append(
                 block_id
             )
 
-
     order_preserved = (
         original_ids == structured_ids
     )
-
 
     valid = (
         not missing_blocks
@@ -2170,7 +1974,6 @@ def validate_block_preservation(
         and not duplicate_blocks
         and order_preserved
     )
-
 
     return {
         "valid": valid,
@@ -2204,9 +2007,7 @@ def get_all_structured_text(
 
     parts = []
 
-
     for block in blocks:
-
 
         if block["type"] in (
             "heading",
@@ -2216,7 +2017,6 @@ def get_all_structured_text(
             source_lines = block.get(
                 "source_lines"
             )
-
 
             if source_lines:
 
@@ -2233,7 +2033,6 @@ def get_all_structured_text(
                     )
                 )
 
-
         elif block["type"] == "table":
 
             parts.extend(
@@ -2243,10 +2042,7 @@ def get_all_structured_text(
                 )
             )
 
-
-    return "\n".join(
-        parts
-    )
+    return "\n".join(parts)
 
 
 def calculate_token_coverage(
@@ -2254,9 +2050,7 @@ def calculate_token_coverage(
     structured_text: str
 ) -> Dict[str, Any]:
     """
-    Secondary validation.
-
-    Checks lexical preservation.
+    Secondary lexical preservation validation.
     """
 
     original_tokens = re.findall(
@@ -2264,12 +2058,10 @@ def calculate_token_coverage(
         original_text.lower()
     )
 
-
     structured_tokens = re.findall(
         r"\w+",
         structured_text.lower()
     )
-
 
     original_set = set(
         original_tokens
@@ -2278,7 +2070,6 @@ def calculate_token_coverage(
     structured_set = set(
         structured_tokens
     )
-
 
     if not original_set:
 
@@ -2295,12 +2086,10 @@ def calculate_token_coverage(
             len(original_set)
         )
 
-
     missing_tokens = sorted(
         original_set
         - structured_set
     )
-
 
     return {
         "original_token_count": (
@@ -2333,8 +2122,7 @@ def structure_document(
     text: str
 ) -> Dict[str, Any]:
     """
-    MAIN PIPELINE
-
+    MAIN STRUCTURING PIPELINE
 
         EXTRACTED DOCUMENT TEXT
                   |
@@ -2349,7 +2137,6 @@ def structure_document(
                   |
                   v
         APPLY DECISIONS
-        WITHOUT CHANGING CONTENT
                   |
                   v
         DOCUMENT TREE
@@ -2364,9 +2151,7 @@ def structure_document(
             "structure_document expects a string."
         )
 
-
     original_text = text
-
 
     # --------------------------------------------------------
     # STEP 1
@@ -2376,7 +2161,6 @@ def structure_document(
     original_blocks = parse_blocks(
         original_text
     )
-
 
     # --------------------------------------------------------
     # STEP 2
@@ -2388,7 +2172,6 @@ def structure_document(
             original_blocks
         )
     )
-
 
     # --------------------------------------------------------
     # STEP 3
@@ -2402,7 +2185,6 @@ def structure_document(
         )
     )
 
-
     # --------------------------------------------------------
     # STEP 4
     # BUILD TREE
@@ -2414,7 +2196,6 @@ def structure_document(
         )
     )
 
-
     # --------------------------------------------------------
     # STEP 5
     # METADATA
@@ -2425,7 +2206,6 @@ def structure_document(
             structured_blocks
         )
     )
-
 
     # --------------------------------------------------------
     # STEP 6
@@ -2439,13 +2219,11 @@ def structure_document(
         )
     )
 
-
     structured_text = (
         get_all_structured_text(
             structured_blocks
         )
     )
-
 
     token_validation = (
         calculate_token_coverage(
@@ -2453,7 +2231,6 @@ def structure_document(
             structured_text
         )
     )
-
 
     # --------------------------------------------------------
     # COUNTS
@@ -2467,13 +2244,11 @@ def structure_document(
         ) == "heading"
     )
 
-
     paragraph_count = sum(
         1
         for block in structured_blocks
         if block["type"] == "paragraph"
     )
-
 
     table_count = sum(
         1
@@ -2481,9 +2256,7 @@ def structure_document(
         if block["type"] == "table"
     )
 
-
     return {
-
         "metadata": metadata,
 
         "llm": llm_metadata,
@@ -2493,7 +2266,6 @@ def structure_document(
         "document_tree": document_tree,
 
         "validation": {
-
             "block_count": (
                 len(structured_blocks)
             ),
@@ -2517,11 +2289,9 @@ def structure_document(
             "token_preservation": (
                 token_validation
             )
-
         },
 
         # RAW SOURCE IS ALWAYS KEPT.
-
         "raw_text": original_text
     }
 
@@ -2537,10 +2307,7 @@ def read_input_file(
     Read input document.
     """
 
-    path = Path(
-        input_path
-    )
-
+    path = Path(input_path)
 
     if not path.exists():
 
@@ -2548,7 +2315,6 @@ def read_input_file(
             f"Input file not found: "
             f"{input_path}"
         )
-
 
     return path.read_text(
         encoding="utf-8",
@@ -2564,16 +2330,12 @@ def write_output_file(
     Write structured JSON.
     """
 
-    path = Path(
-        output_path
-    )
-
+    path = Path(output_path)
 
     path.parent.mkdir(
         parents=True,
         exist_ok=True
     )
-
 
     path.write_text(
         json.dumps(
@@ -2583,6 +2345,71 @@ def write_output_file(
         ),
         encoding="utf-8"
     )
+
+
+# ============================================================
+# PIPELINE COMPATIBILITY WRAPPER
+# ============================================================
+
+def structure_markdown_file(
+    input_path: Path,
+    output_path: Path,
+    document_id: Optional[str] = None
+) -> Dict[str, Any]:
+    """
+    Pipeline-compatible wrapper around structure_document().
+
+    Reads cleaned Markdown,
+    performs lossless semantic structuring,
+    and writes structured JSON.
+
+    document_id is accepted for compatibility with
+    app.steps.pipeline.
+    """
+
+    input_path = Path(input_path)
+    output_path = Path(output_path)
+
+    if not input_path.exists():
+
+        raise FileNotFoundError(
+            f"Input file not found: {input_path}"
+        )
+
+    if input_path.suffix.lower() != ".md":
+
+        raise ValueError(
+            f"Expected Markdown input, got: {input_path}"
+        )
+
+    # Read Markdown
+    text = read_input_file(
+        str(input_path)
+    )
+
+    # Structure document
+    result = structure_document(
+        text
+    )
+
+    # Pipeline metadata
+    if document_id is not None:
+
+        result[
+            "document_id"
+        ] = str(document_id)
+
+    result[
+        "source_file"
+    ] = str(input_path)
+
+    # Write JSON
+    write_output_file(
+        result,
+        str(output_path)
+    )
+
+    return result
 
 
 # ============================================================
@@ -2668,9 +2495,7 @@ def main():
 
         sys.exit(1)
 
-
     input_path = sys.argv[1]
-
 
     if len(sys.argv) >= 3:
 
@@ -2688,9 +2513,7 @@ def main():
             )
         )
 
-
     print_environment()
-
 
     print("\n" + "=" * 70)
 
@@ -2716,7 +2539,6 @@ def main():
         f"LLM   : {LLM_ENABLED}"
     )
 
-
     # --------------------------------------------------------
     # STEP 1
     # --------------------------------------------------------
@@ -2725,17 +2547,14 @@ def main():
         "\n[1/5] Reading document..."
     )
 
-
     text = read_input_file(
         input_path
     )
-
 
     print(
         f"      Characters: "
         f"{len(text):,}"
     )
-
 
     # --------------------------------------------------------
     # STEP 2
@@ -2745,11 +2564,9 @@ def main():
         "\n[2/5] Python boundary parsing..."
     )
 
-
     preview_blocks = parse_blocks(
         text
     )
-
 
     heading_candidates = sum(
         1
@@ -2760,20 +2577,17 @@ def main():
         )
     )
 
-
     paragraphs = sum(
         1
         for block in preview_blocks
         if block["type"] == "paragraph"
     )
 
-
     tables = sum(
         1
         for block in preview_blocks
         if block["type"] == "table"
     )
-
 
     print(
         f"      Blocks: "
@@ -2795,7 +2609,6 @@ def main():
         f"{tables}"
     )
 
-
     # --------------------------------------------------------
     # STEP 3
     # --------------------------------------------------------
@@ -2804,20 +2617,16 @@ def main():
         "\n[3/5] Semantic structuring..."
     )
 
-
     print(
         "\n      Calling LLM "
         "for semantic structure..."
     )
 
-
     result = structure_document(
         text
     )
 
-
     llm_info = result["llm"]
-
 
     if llm_info.get("used"):
 
@@ -2842,7 +2651,6 @@ def main():
             "\n      Python fallback used."
         )
 
-
     # --------------------------------------------------------
     # STEP 4
     # --------------------------------------------------------
@@ -2851,45 +2659,37 @@ def main():
         "\n[4/5] Checking information preservation..."
     )
 
-
     validation = result[
         "validation"
     ]
-
 
     block_preservation = validation[
         "block_preservation"
     ]
 
-
     token_preservation = validation[
         "token_preservation"
     ]
-
 
     print(
         f"      Token coverage: "
         f"{token_preservation['token_coverage']:.2%}"
     )
 
-
     print(
         f"      Structure valid: "
         f"{block_preservation['valid']}"
     )
-
 
     print(
         f"      Missing blocks: "
         f"{len(block_preservation['missing_blocks'])}"
     )
 
-
     print(
         f"      Duplicate blocks: "
         f"{len(block_preservation['duplicate_blocks'])}"
     )
-
 
     if (
         token_preservation[
@@ -2910,7 +2710,6 @@ def main():
             )
         )
 
-
     # --------------------------------------------------------
     # STEP 5
     # --------------------------------------------------------
@@ -2919,12 +2718,10 @@ def main():
         "\n[5/5] Writing structured document..."
     )
 
-
     write_output_file(
         result,
         output_path
     )
-
 
     print(
         "\n"
@@ -2938,7 +2735,6 @@ def main():
     print(
         "=" * 70
     )
-
 
     print(
         "\nStructured document "
@@ -2955,5 +2751,4 @@ def main():
 # ============================================================
 
 if __name__ == "__main__":
-
     main()
