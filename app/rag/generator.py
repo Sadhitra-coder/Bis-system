@@ -1,26 +1,33 @@
+"""
+Grounded answer generation.
+
+CONFIGURATION
+-------------
+Every runtime value comes from app.config.settings. This module
+does not call load_dotenv() or os.getenv(): Settings already
+reads .env, and having two places read the environment meant
+GROQ_MODEL could differ between the ingestion stage and the
+answer stage.
+
+RELIABILITY
+-----------
+The Groq call goes through app.llm_client.GroqClient, which adds
+retry with exponential backoff for transient failures (rate
+limits, timeouts, 5xx) and fails fast on permanent ones (bad key,
+unknown model). A failed call raises - it is never converted into
+a confident-looking answer.
+"""
+
+import json
 import logging
-import os
-from typing import Any, Dict, List, Optional
+import re
+from typing import Any, Dict, List, Mapping, Optional, Tuple
 
-from dotenv import load_dotenv
-from groq import Groq
+from app.config import settings
+from app.llm_client import GroqClient
+from app.rag.source_format import extract_source_identity, format_source_header
+from app.confidence.models import Decision, ConfidenceResult
 
-
-# ============================================================
-# LOAD ENVIRONMENT VARIABLES
-# ============================================================
-
-load_dotenv()
-
-
-# ============================================================
-# LOGGING
-# ============================================================
-
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(levelname)s | %(message)s"
-)
 
 logger = logging.getLogger(__name__)
 
@@ -52,64 +59,61 @@ class AnswerGenerator:
     def __init__(
         self,
         model: Optional[str] = None,
-        temperature: float = 0.1,
-        max_tokens: int = 1200
+        temperature: Optional[float] = None,
+        max_tokens: Optional[int] = None,
+        client: Optional[GroqClient] = None
     ) -> None:
+        """
+        Parameters
+        ----------
+        model:
+            Groq model id. Defaults to settings.GROQ_MODEL.
 
-        print("\n" + "=" * 70)
-        print("INITIALIZING ANSWER GENERATOR")
-        print("=" * 70 + "\n")
+        temperature:
+            Defaults to settings.GENERATION_TEMPERATURE.
 
-        # ----------------------------------------------------
-        # MODEL CONFIGURATION
-        # ----------------------------------------------------
+        max_tokens:
+            Defaults to settings.GENERATION_MAX_TOKENS.
 
-        self.model = (
-            model
-            or os.getenv(
-                "GROQ_MODEL",
-                "openai/gpt-oss-20b"
-            )
+        client:
+            Preloaded GroqClient. Supplied by the API startup
+            hook so one client is shared per process.
+
+        Raises
+        ------
+        LLMUnavailableError
+            If GROQ_API_KEY is not configured.
+        """
+
+        self.model = model or settings.GROQ_MODEL
+
+        self.temperature = (
+            settings.GENERATION_TEMPERATURE
+            if temperature is None
+            else temperature
         )
 
-        self.temperature = temperature
-        self.max_tokens = max_tokens
-
-        # ----------------------------------------------------
-        # API KEY
-        # ----------------------------------------------------
-
-        api_key = os.getenv(
-            "GROQ_API_KEY"
+        self.max_tokens = (
+            settings.GENERATION_MAX_TOKENS
+            if max_tokens is None
+            else max_tokens
         )
 
-        if not api_key:
-
-            raise ValueError(
-                "\nGROQ_API_KEY not found.\n\n"
-                "Add the following to your .env file:\n\n"
-                "GROQ_API_KEY=your_api_key_here\n"
-            )
-
         # ----------------------------------------------------
-        # INITIALIZE CLIENT
+        # CLIENT
+        #
+        # GroqClient raises LLMUnavailableError when the key is
+        # missing, so a misconfigured deployment fails at
+        # construction rather than on the first user query.
         # ----------------------------------------------------
+
+        self.client = client if client is not None else GroqClient()
 
         logger.info(
-            "Connecting to Groq..."
+            "Answer generator ready | model=%s | temperature=%.2f",
+            self.model,
+            self.temperature
         )
-
-        self.client = Groq(
-            api_key=api_key
-        )
-
-        logger.info(
-            f"Model selected: {self.model}"
-        )
-
-        print("\n" + "=" * 70)
-        print("ANSWER GENERATOR READY")
-        print("=" * 70)
 
     # ========================================================
     # SAFE TEXT CONVERSION
@@ -155,15 +159,18 @@ class AnswerGenerator:
             "content": "..."
         }
 
-        Optional fields:
+        Optional fields (canonical index/retrieval names):
 
         {
             "chunk_id": "...",
             "metadata": {...},
             "document_id": "...",
             "section": "...",
-            "title": "...",
-            "standard": "..."
+            "standard_number": "...",
+            "standard_title": "...",
+            "clause_id": "...",
+            "page_start": 1,
+            "page_end": 1
         }
         """
 
@@ -184,7 +191,7 @@ class AnswerGenerator:
 
             if not isinstance(
                 result,
-                dict
+                (dict, Mapping)
             ):
 
                 logger.warning(
@@ -195,14 +202,11 @@ class AnswerGenerator:
                 continue
 
             # ------------------------------------------------
-            # CONTENT
+            # CONTENT (Authoritative source_content per Section 6)
             # ------------------------------------------------
 
             content = self._safe_text(
-                result.get(
-                    "content",
-                    ""
-                )
+                result.get("source_content") or result.get("content", "")
             )
 
             if not content:
@@ -210,125 +214,23 @@ class AnswerGenerator:
                 continue
 
             # ------------------------------------------------
-            # METADATA
+            # SOURCE PROVENANCE
+            #
+            # Delegated to app.rag.source_format so the grounding context
+            # and the API `sources` array name a standard the same way.
             # ------------------------------------------------
 
-            metadata = result.get(
-                "metadata",
-                {}
-            )
-
-            if not isinstance(
-                metadata,
-                dict
-            ):
-
-                metadata = {}
-
-            # ------------------------------------------------
-            # EXTRACT OPTIONAL SOURCE INFORMATION
-            # ------------------------------------------------
-
-            document_id = self._safe_text(
-                metadata.get(
-                    "document_id"
-                )
-                or result.get(
-                    "document_id"
-                )
-            )
-
-            section = self._safe_text(
-                metadata.get(
-                    "section"
-                )
-                or result.get(
-                    "section"
-                )
-            )
-
-            title = self._safe_text(
-                metadata.get(
-                    "title"
-                )
-                or result.get(
-                    "title"
-                )
-            )
-
-            standard = self._safe_text(
-                metadata.get(
-                    "standard"
-                )
-                or result.get(
-                    "standard"
-                )
-            )
-
-            source_file = self._safe_text(
-                metadata.get(
-                    "source_file"
-                )
-                or result.get(
-                    "source_file"
-                )
+            source_information = format_source_header(
+                extract_source_identity(result)
             )
 
             # ------------------------------------------------
-            # SOURCE HEADER
-            # ------------------------------------------------
-
-            source_lines: List[str] = []
-
-            if document_id:
-
-                source_lines.append(
-                    f"Document: {document_id}"
-                )
-
-            if title:
-
-                source_lines.append(
-                    f"Title: {title}"
-                )
-
-            if standard:
-
-                source_lines.append(
-                    f"Standard: {standard}"
-                )
-
-            if section:
-
-                source_lines.append(
-                    f"Section: {section}"
-                )
-
-            if source_file:
-
-                source_lines.append(
-                    f"Source file: {source_file}"
-                )
-
-            if source_lines:
-
-                source_information = "\n".join(
-                    source_lines
-                )
-
-            else:
-
-                source_information = (
-                    "Source information not available."
-                )
-
-            # ------------------------------------------------
-            # BUILD FORMATTED CHUNK
+            # BUILD FORMATTED CHUNK WITH STABLE EVIDENCE TOKEN
             # ------------------------------------------------
 
             formatted_chunk = f"""
 ==================================================
-RETRIEVED SOURCE {index}
+RETRIEVED SOURCE {index} [EVIDENCE EV{index}]
 ==================================================
 
 {source_information}
@@ -638,6 +540,63 @@ Never mention:
 - retrieval scores
 
 ==================================================
+GENERATION SAFETY & NEGATIVE EVIDENCE RULES (Prompt 7)
+==================================================
+
+1. NEVER claim an AI result is "approved", "certified", or "officially compliant".
+   AI interpretations are not official regulatory determinations.
+
+2. NEVER infer legal currentness, validity, or supersession status unless
+   explicitly stated in the retrieved text.
+
+3. CRITICAL: Never convert the absence of evidence into negative evidence.
+   If retrieved chunks do not mention a requirement, say:
+   "No requirement was found in the retrieved documentation."
+   NEVER say:
+   "No requirement exists" or "The standard does not require this."
+
+==================================================
+CITATION ENFORCEMENT & STRUCTURED OUTPUT (Prompt 8)
+==================================================
+
+You must format your response as a valid JSON object matching this schema:
+
+{
+  "answer": "Clear, readable answer text. Include inline citation tags like [EV1], [EV2] at the end of every sentence or factual statement.",
+  "claims": [
+    {
+      "claim_id": "C1",
+      "text": "The exact factual, interpretive, or uncertainty claim statement",
+      "claim_type": "fact",
+      "citation_ids": ["EV1"]
+    }
+  ]
+}
+
+CITATION RULES:
+1. Every retrieved passage is labelled with an explicit evidence token like [EVIDENCE EV1], [EVIDENCE EV2], etc.
+2. Every factual statement MUST cite the exact evidence token supporting it (e.g. [EV1]).
+3. NEVER invent citation tokens such as [EV99] or cite an evidence token that does not exist in the retrieved documentation.
+4. NEVER invent page numbers, clause IDs, standard numbers, or amendment numbers.
+5. NUMERICAL INTEGRITY: All numbers, percentages, measurements, frequencies, sample sizes, and tolerances must match the cited evidence text exactly. Do not round, approximate, or change units.
+6. CLAIM TYPES:
+   - "fact": statement directly supported and stated by cited evidence.
+   - "interpretation": reasoned deduction or suggestion (e.g. "This suggests...").
+   - "uncertainty": statement noting missing, incomplete, or unestablished requirements.
+7. NEVER extrapolate regulatory conclusions such as "prohibited from selling" or "mandatory certification before sale" unless the retrieved text explicitly states it.
+8. If evidence is missing, use an uncertainty claim (e.g. "The retrieved documentation does not specify X"). NEVER claim "X does not exist".
+
+==================================================
+TEMPORAL, VERSION & AMENDMENT SAFETY RULES (Prompt 9)
+==================================================
+
+1. NEVER call a document or edition "current" unless explicit source evidence in the retrieved text confirms it.
+2. NEVER assume the latest publication date or highest year represents the currently active or legally binding standard.
+3. NEVER declare a standard or edition "superseded" unless explicit supersession text (e.g., "supersedes IS XXXX") is present in the cited evidence.
+4. NEVER consolidate or merge amendments into a base clause unless the retrieved source explicitly presents an official consolidated text. Always cite base text and amendment text separately.
+5. When temporal currentness or supersession cannot be established from the retrieved evidence, EXPLICITLY state the uncertainty (e.g. "The current legal status could not be established from the retrieved documentation; verification is required.").
+
+==================================================
 FINAL ACCURACY CHECK
 ==================================================
 
@@ -665,11 +624,59 @@ If information is missing, say so instead of guessing.
     def build_user_prompt(
         self,
         query: str,
-        context: str
+        context: str,
+        confidence: Optional[ConfidenceResult] = None,
+        repair_feedback: Optional[str] = None,
     ) -> str:
         """
-        Build the dynamic user prompt.
+        Build the dynamic user prompt with confidence-aware and grounding instructions.
         """
+        confidence_instruction = ""
+        if confidence is not None:
+            if confidence.decision == Decision.QUALIFIED_ANSWER:
+                reasons_str = "; ".join(confidence.reasons) if confidence.reasons else "moderate evidence"
+                confidence_instruction = f"""
+==================================================
+EVIDENCE QUALIFICATION INSTRUCTION
+==================================================
+The retrieved documentation provides moderate evidence confidence ({reasons_str}).
+Explicitly state any limitations, assumptions, or unverified details in your response.
+Clearly state what is directly confirmed in the text and what remains unverified.
+"""
+            elif confidence.decision == Decision.VERIFICATION_REQUIRED:
+                unresolved_str = "; ".join(confidence.unresolved_aspects) if confidence.unresolved_aspects else "insufficient evidence"
+                req_info_str = "; ".join(confidence.required_information) if confidence.required_information else "official standards"
+                confidence_instruction = f"""
+==================================================
+CRITICAL ABSTENTION / VERIFICATION REQUIRED INSTRUCTION
+==================================================
+The system has determined that VERIFICATION IS REQUIRED:
+Reason: {confidence.verification_reason}
+Unresolved aspects: {unresolved_str}
+Required information: {req_info_str}
+
+Follow these instructions strictly:
+1. Do NOT make confident factual assertions about unverified claims.
+2. Clearly summarize only what is explicitly present in the retrieved passages.
+3. Explicitly state that verification is required against official Indian Standards or competent authorities.
+4. Highlight what specific documentation or standard version would need to be reviewed.
+5. NEVER claim that a requirement does not exist merely because it is absent from the retrieved excerpts.
+"""
+
+        repair_instruction = ""
+        if repair_feedback:
+            repair_instruction = f"""
+==================================================
+GROUNDING CORRECTION REQUIRED
+==================================================
+The previous generation attempt produced the following grounding issues:
+{repair_feedback}
+
+Please regenerate your answer addressing these issues:
+1. Remove or qualify any unsupported claims.
+2. Only make factual assertions that are directly supported by the cited evidence.
+3. Ensure every factual claim has an exact, valid evidence citation token (e.g. [EV1]).
+"""
 
         return f"""
 Answer the user's question using ONLY the retrieved documentation.
@@ -685,26 +692,24 @@ RETRIEVED DOCUMENTATION
 ==================================================
 
 {context}
-
+{confidence_instruction}
+{repair_instruction}
 ==================================================
 IMPORTANT ANSWERING RULES
 ==================================================
 
-- Answer directly.
-- Use only information supported by the retrieved documentation.
+- Answer directly using only facts supported by the retrieved documentation.
+- Attach evidence citation tokens like [EV1], [EV2] to every factual assertion.
 - Do not invent missing information.
-- Do not infer the full content of a clause from its clause number.
-- Do not invent procedural steps.
-- Do not assume the meaning of abbreviations or table symbols unless
-  they are explicitly defined.
-- Keep different requirements separate when they may apply to different
-  situations.
-- If the exact answer is missing, clearly say what the documentation
-  does provide and what is missing.
-- Explain technical information in simple language where possible.
-- Do not mention internal retrieval systems.
+- Format your entire output as a valid JSON object matching:
+{{
+  "answer": "Your complete readable answer text with inline citation tokens [EV1], etc.",
+  "claims": [
+    {{"claim_id": "C1", "text": "Claim statement", "claim_type": "fact", "citation_ids": ["EV1"]}}
+  ]
+}}
 
-Now provide the final answer.
+Now provide the final JSON response.
 """
 
     # ========================================================
@@ -712,24 +717,58 @@ Now provide the final answer.
     # ========================================================
 
     def _empty_result_response(
-        self
+        self,
+        reason: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Response when no usable context exists.
         """
-
+        msg = reason or (
+            "Verification Required: I couldn't find relevant information in the "
+            "available documentation to answer this question. Please verify against "
+            "official Indian Standard publications."
+        )
         return {
-            "answer": (
-                "I couldn't find relevant information in the "
-                "available documentation to answer this question."
-            ),
-
-            "model":
-                self.model,
-
-            "context_chunks":
-                0
+            "answer": msg,
+            "raw_claims": [],
+            "model": self.model,
+            "context_chunks": 0,
         }
+
+    # ========================================================
+    # PARSE STRUCTURED OUTPUT
+    # ========================================================
+
+    @staticmethod
+    def _parse_structured_output(text: str) -> Tuple[str, List[Dict[str, Any]]]:
+        """
+        Parses structured JSON answer + claims from model response.
+        Falls back gracefully if the model returned plain text or markdown.
+        """
+        stripped = text.strip()
+        json_str = stripped
+        if "```json" in stripped:
+            start = stripped.find("```json") + 7
+            end = stripped.find("```", start)
+            json_str = stripped[start:end].strip() if end != -1 else stripped[start:].strip()
+        elif "```" in stripped:
+            start = stripped.find("```") + 3
+            end = stripped.find("```", start)
+            json_str = stripped[start:end].strip() if end != -1 else stripped[start:].strip()
+
+        try:
+            parsed = json.loads(json_str)
+            if isinstance(parsed, dict) and "answer" in parsed:
+                answer = str(parsed["answer"]).strip()
+                claims = parsed.get("claims", [])
+                if isinstance(claims, list):
+                    return answer, claims
+                return answer, []
+        except Exception:
+            pass
+
+        # Plain text fallback
+        return stripped, []
 
     # ========================================================
     # GENERATE ANSWER
@@ -738,10 +777,12 @@ Now provide the final answer.
     def generate(
         self,
         query: str,
-        results: List[Dict[str, Any]]
+        results: List[Dict[str, Any]],
+        confidence: Optional[ConfidenceResult] = None,
+        repair_feedback: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
-        Generate a grounded answer.
+        Generate a grounded answer with evidence confidence awareness and grounding validation.
         """
 
         # ----------------------------------------------------
@@ -775,7 +816,8 @@ Now provide the final answer.
                 "No results provided to generator."
             )
 
-            return self._empty_result_response()
+            reason = confidence.verification_reason if confidence else None
+            return self._empty_result_response(reason=reason)
 
         # ----------------------------------------------------
         # FORMAT CONTEXT
@@ -791,7 +833,8 @@ Now provide the final answer.
                 "No usable context created."
             )
 
-            return self._empty_result_response()
+            reason = confidence.verification_reason if confidence else None
+            return self._empty_result_response(reason=reason)
 
         logger.info(
             f"Generating answer using "
@@ -809,7 +852,9 @@ Now provide the final answer.
         user_prompt = (
             self.build_user_prompt(
                 query=query,
-                context=context
+                context=context,
+                confidence=confidence,
+                repair_feedback=repair_feedback,
             )
         )
 
@@ -817,101 +862,34 @@ Now provide the final answer.
         # CALL GROQ
         # ----------------------------------------------------
 
-        try:
+        response_text = self.client.chat_completion(
+            messages=[
+                {
+                    "role": "system",
+                    "content": system_prompt
+                },
+                {
+                    "role": "user",
+                    "content": user_prompt
+                }
+            ],
+            model=self.model,
+            temperature=self.temperature,
+            max_completion_tokens=self.max_tokens,
+            description="answer generation"
+        ).strip()
 
-            completion = (
-                self.client
-                .chat
-                .completions
-                .create(
-                    model=self.model,
+        logger.info("Answer generated successfully.")
 
-                    messages=[
-                        {
-                            "role": "system",
-                            "content":
-                                system_prompt
-                        },
-                        {
-                            "role": "user",
-                            "content":
-                                user_prompt
-                        }
-                    ],
-
-                    temperature=
-                        self.temperature,
-
-                    max_completion_tokens=
-                        self.max_tokens,
-
-                    top_p=0.9
-                )
-            )
-
-        except Exception as error:
-
-            logger.exception(
-                "Groq generation failed."
-            )
-
-            raise RuntimeError(
-                "Failed to generate an answer."
-            ) from error
-
-        # ----------------------------------------------------
-        # EXTRACT ANSWER
-        # ----------------------------------------------------
-
-        answer = ""
-
-        try:
-
-            if completion.choices:
-
-                message = (
-                    completion
-                    .choices[0]
-                    .message
-                )
-
-                answer = (
-                    message.content
-                    or ""
-                ).strip()
-
-        except Exception:
-
-            logger.exception(
-                "Failed to extract answer."
-            )
-
-        # ----------------------------------------------------
-        # FALLBACK
-        # ----------------------------------------------------
-
-        if not answer:
-
-            answer = (
-                "I couldn't generate a clear answer from "
-                "the retrieved documentation."
-            )
-
-        logger.info(
-            "Answer generated successfully."
-        )
+        answer, raw_claims = self._parse_structured_output(response_text)
 
         # ----------------------------------------------------
         # RETURN RESULT
         # ----------------------------------------------------
 
         return {
-            "answer":
-                answer,
-
-            "model":
-                self.model,
-
-            "context_chunks":
-                len(results)
-        }
+            "answer": answer,
+            "raw_claims": raw_claims,
+            "model": self.model,
+            "context_chunks": len(results),
+        }

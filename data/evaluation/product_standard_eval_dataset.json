@@ -1,0 +1,420 @@
+[
+  {
+    "product_id": "PROD-001",
+    "product_description": "Digital clinical thermometers for hospital temperature measurement",
+    "explicit_characteristics": {
+      "product_name": "digital clinical thermometer",
+      "product_category": "clinical thermometer",
+      "technology": "digital",
+      "intended_use": "clinical",
+      "customer_type": "hospitals"
+    },
+    "expected_candidate_standard_ids": ["IS 3055", "IS 10124"],
+    "relevance_labels": {
+      "IS 3055": "strong",
+      "IS 10124": "strong",
+      "IS 2347": "not_relevant",
+      "IS 694": "not_relevant"
+    },
+    "notes": "IS 3055 covers clinical thermometers; IS 10124 covers electronic clinical thermometers."
+  },
+  {
+    "product_id": "PROD-002",
+    "product_description": "Mercury-in-glass clinical thermometer with prismatic tube",
+    "explicit_characteristics": {
+      "product_name": "mercury-in-glass clinical thermometer",
+      "product_category": "clinical thermometer",
+      "material": "mercury",
+      "intended_use": "clinical"
+    },
+    "expected_candidate_standard_ids": ["IS 3055"],
+    "relevance_labels": {
+      "IS 3055": "strong",
+      "IS 10124": "possible",
+      "IS 4985": "not_relevant"
+    },
+    "notes": "IS 3055 specifies clinical thermometers mercury-in-glass."
+  },
+  {
+    "product_id": "PROD-003",
+    "product_description": "Domestic electric water heater (storage geyser) 15 litre capacity",
+    "explicit_characteristics": {
+      "product_name": "electric water heater",
+      "product_category": "electric water heater",
+      "technology": "electric",
+      "intended_use": "domestic",
+      "capacity_or_rating": ["15 litre"]
+    },
+    "expected_candidate_standard_ids": ["IS 2082", "IS 302-2-21"],
+    "relevance_labels": {
+      "IS 2082": "strong",
+      "IS 302-2-21": "strong",
+      "IS 3055": "not_relevant"
+    },
+    "notes": "IS 2082 covers stationary storage electric water heaters; IS 302-2-21 covers particular safety requirements."
+  },
+  {
+    "product_id": "PROD-004",
+    "product_description": "Electric steam iron for household clothes pressing",
+    "explicit_characteristics": {
+      "product_name": "electric iron",
+      "product_category": "electric iron",
+      "technology": "electric",
+      "intended_use": "domestic"
+    },
+    "expected_candidate_standard_ids": ["IS 302-2-3", "IS 366"],
+    "relevance_labels": {
+      "IS 302-2-3": "strong",
+      "IS 366": "strong",
+      "IS 2925": "not_relevant"
+    },
+    "notes": "IS 302-2-3 specifies safety for electric irons; IS 366 specifies electric irons."
+  },
+  {
+    "product_id": "PROD-005",
+    "product_description": "Domestic aluminium pressure cooker with gasket release safety system",
+    "explicit_characteristics": {
+      "product_name": "pressure cooker",
+      "product_category": "pressure cooker",
+      "material": "aluminum",
+      "intended_use": "domestic"
+    },
+    "expected_candidate_standard_ids": ["IS 2347"],
+    "relevance_labels": {
+      "IS 2347": "strong",
+      "IS 14756": "possible",
+      "IS 3055": "not_relevant"
+    },
+    "notes": "IS 2347 is the Indian Standard for domestic pressure cookers."
+  },
+  {
+    "product_id": "PROD-006",
+    "product_description": "Industrial protective safety helmets for construction workers",
+    "explicit_characteristics": {
+      "product_name": "safety helmet",
+      "product_category": "safety helmet",
+      "intended_use": "industrial"
+    },
+    "expected_candidate_standard_ids": ["IS 2925"],
+    "relevance_labels": {
+      "IS 2925": "strong",
+      "IS 4151": "possible",
+      "IS 2082": "not_relevant"
+    },
+    "notes": "IS 2925 covers industrial safety helmets; IS 4151 is for motorcycle helmets."
+  },
+  {
+    "product_id": "PROD-007",
+    "product_description": "Packaged natural mineral water in sealed 1 litre bottles",
+    "explicit_characteristics": {
+      "product_name": "packaged drinking water",
+      "product_category": "packaged drinking water",
+      "capacity_or_rating": ["1 litre"]
+    },
+    "expected_candidate_standard_ids": ["IS 13428", "IS 14543"],
+    "relevance_labels": {
+      "IS 13428": "strong",
+      "IS 14543": "strong",
+      "IS 1786": "not_relevant"
+    },
+    "notes": "IS 13428 is packaged natural mineral water; IS 14543 is packaged drinking water."
+  },
+  {
+    "product_id": "PROD-008",
+    "product_description": "22 karat hallmarked gold jewellery articles and artefacts",
+    "explicit_characteristics": {
+      "product_name": "gold jewellery",
+      "product_category": "gold jewellery",
+      "material": "gold"
+    },
+    "expected_candidate_standard_ids": ["IS 1417", "IS 2112"],
+    "relevance_labels": {
+      "IS 1417": "strong",
+      "IS 2112": "strong",
+      "IS 4985": "not_relevant"
+    },
+    "notes": "IS 1417 specifies gold and gold alloys, fineness and hallmarking."
+  },
+  {
+    "product_id": "PROD-009",
+    "product_description": "Unplasticized PVC pipes for potable cold water supplies in buildings",
+    "explicit_characteristics": {
+      "product_name": "PVC pipe",
+      "product_category": "PVC pipe",
+      "material": "PVC",
+      "intended_use": "domestic"
+    },
+    "expected_candidate_standard_ids": ["IS 4985"],
+    "relevance_labels": {
+      "IS 4985": "strong",
+      "IS 4984": "possible",
+      "IS 3055": "not_relevant"
+    },
+    "notes": "IS 4985 covers unplasticized PVC pipes for potable water supplies."
+  },
+  {
+    "product_id": "PROD-010",
+    "product_description": "High density polyethylene (HDPE) pipes for water supply mains",
+    "explicit_characteristics": {
+      "product_name": "polyethylene pipe",
+      "product_category": "polyethylene pipe",
+      "material": "polyethylene"
+    },
+    "expected_candidate_standard_ids": ["IS 4984"],
+    "relevance_labels": {
+      "IS 4984": "strong",
+      "IS 4985": "possible",
+      "IS 694": "not_relevant"
+    },
+    "notes": "IS 4984 specifies high density polyethylene pipes for water supply."
+  },
+  {
+    "product_id": "PROD-011",
+    "product_description": "Lead-acid storage batteries for motor vehicles with 12V rating",
+    "explicit_characteristics": {
+      "product_name": "lead acid battery",
+      "product_category": "lead acid battery",
+      "material": "lead acid",
+      "capacity_or_rating": ["12v"]
+    },
+    "expected_candidate_standard_ids": ["IS 14257", "IS 7372"],
+    "relevance_labels": {
+      "IS 14257": "strong",
+      "IS 7372": "strong",
+      "IS 1786": "not_relevant"
+    },
+    "notes": "IS 14257 covers lead acid storage batteries for motor vehicles."
+  },
+  {
+    "product_id": "PROD-012",
+    "product_description": "Ordinary Portland Cement grade 43 for construction mortar and concrete",
+    "explicit_characteristics": {
+      "product_name": "cement",
+      "product_category": "cement",
+      "material": "portland cement",
+      "intended_use": "industrial"
+    },
+    "expected_candidate_standard_ids": ["IS 8112", "IS 269"],
+    "relevance_labels": {
+      "IS 8112": "strong",
+      "IS 269": "strong",
+      "IS 302-2-3": "not_relevant"
+    },
+    "notes": "IS 8112 specifies 43 grade ordinary portland cement; IS 269 covers OPC generally."
+  },
+  {
+    "product_id": "PROD-013",
+    "product_description": "High strength deformed steel bars (TMT bars) Fe 500D for concrete reinforcement",
+    "explicit_characteristics": {
+      "product_name": "steel bar",
+      "product_category": "steel bar",
+      "material": "steel",
+      "intended_use": "industrial"
+    },
+    "expected_candidate_standard_ids": ["IS 1786"],
+    "relevance_labels": {
+      "IS 1786": "strong",
+      "IS 2062": "possible",
+      "IS 1417": "not_relevant"
+    },
+    "notes": "IS 1786 covers high strength deformed steel bars and wires for concrete reinforcement."
+  },
+  {
+    "product_id": "PROD-014",
+    "product_description": "Electric battery-operated ride-on toy vehicles for children",
+    "explicit_characteristics": {
+      "product_name": "toy",
+      "product_category": "toy",
+      "technology": "electric"
+    },
+    "expected_candidate_standard_ids": ["IS 9873", "IS 15644"],
+    "relevance_labels": {
+      "IS 9873": "strong",
+      "IS 15644": "strong",
+      "IS 4985": "not_relevant"
+    },
+    "notes": "IS 9873 specifies safety of toys; IS 15644 specifies safety of electric toys."
+  },
+  {
+    "product_id": "PROD-015",
+    "product_description": "Welded low carbon steel cylinders for liquefied petroleum gas (LPG) 14.2 kg capacity",
+    "explicit_characteristics": {
+      "product_name": "LPG cylinder",
+      "product_category": "LPG cylinder",
+      "material": "carbon steel",
+      "capacity_or_rating": ["14.2 kg"]
+    },
+    "expected_candidate_standard_ids": ["IS 3196"],
+    "relevance_labels": {
+      "IS 3196": "strong",
+      "IS 7285": "possible",
+      "IS 2347": "not_relevant"
+    },
+    "notes": "IS 3196 covers welded low carbon steel gas cylinders for LPG."
+  },
+  {
+    "product_id": "PROD-016",
+    "product_description": "PVC insulated copper conductor electric cables for working voltages up to 1100 V",
+    "explicit_characteristics": {
+      "product_name": "electric cable",
+      "product_category": "electric cable",
+      "material": "PVC",
+      "technology": "electric",
+      "capacity_or_rating": ["1100 v"]
+    },
+    "expected_candidate_standard_ids": ["IS 694", "IS 1554"],
+    "relevance_labels": {
+      "IS 694": "strong",
+      "IS 1554": "strong",
+      "IS 3055": "not_relevant"
+    },
+    "notes": "IS 694 covers PVC insulated unsheathed and sheathed cables up to 1100V."
+  },
+  {
+    "product_id": "PROD-017",
+    "product_description": "Stainless steel cookware pots, pans, and dining utensils",
+    "explicit_characteristics": {
+      "product_name": "stainless steel utensils",
+      "product_category": "utensils",
+      "material": "stainless steel",
+      "intended_use": "domestic"
+    },
+    "expected_candidate_standard_ids": ["IS 14756"],
+    "relevance_labels": {
+      "IS 14756": "strong",
+      "IS 2347": "possible",
+      "IS 1786": "not_relevant"
+    },
+    "notes": "IS 14756 specifies stainless steel cooking utensils."
+  },
+  {
+    "product_id": "PROD-018",
+    "product_description": "Domestic LPG gas stove burner assemblies with flame safety device",
+    "explicit_characteristics": {
+      "product_name": "gas stove",
+      "product_category": "gas stove",
+      "intended_use": "domestic"
+    },
+    "expected_candidate_standard_ids": ["IS 4246"],
+    "relevance_labels": {
+      "IS 4246": "strong",
+      "IS 2347": "possible",
+      "IS 694": "not_relevant"
+    },
+    "notes": "IS 4246 specifies domestic gas stoves for use with LPG."
+  },
+  {
+    "product_id": "PROD-019",
+    "product_description": "Protective helmets for motorcycle and two-wheeler riders with chin strap",
+    "explicit_characteristics": {
+      "product_name": "safety helmet",
+      "product_category": "safety helmet"
+    },
+    "expected_candidate_standard_ids": ["IS 4151"],
+    "relevance_labels": {
+      "IS 4151": "strong",
+      "IS 2925": "possible",
+      "IS 14543": "not_relevant"
+    },
+    "notes": "IS 4151 specifies protective helmets for two-wheeler riders."
+  },
+  {
+    "product_id": "PROD-020",
+    "product_description": "Submersible borehole pump sets for clear cold water irrigation",
+    "explicit_characteristics": {
+      "product_name": "submersible pump",
+      "product_category": "pump",
+      "intended_use": "agricultural"
+    },
+    "expected_candidate_standard_ids": ["IS 8034"],
+    "relevance_labels": {
+      "IS 8034": "strong",
+      "IS 9079": "possible",
+      "IS 3055": "not_relevant"
+    },
+    "notes": "IS 8034 specifies submersible pumpsets."
+  },
+  {
+    "product_id": "PROD-021",
+    "product_description": "Insulating rubber gloves for electrical maintenance technicians",
+    "explicit_characteristics": {
+      "product_name": "rubber gloves",
+      "product_category": "gloves",
+      "material": "rubber",
+      "technology": "electric",
+      "intended_use": "industrial"
+    },
+    "expected_candidate_standard_ids": ["IS 4770"],
+    "relevance_labels": {
+      "IS 4770": "strong",
+      "IS 694": "weak",
+      "IS 2347": "not_relevant"
+    },
+    "notes": "IS 4770 covers rubber gloves for electrical purposes."
+  },
+  {
+    "product_id": "PROD-022",
+    "product_description": "Primary zinc-carbon dry cell cylindrical batteries R6 AA size",
+    "explicit_characteristics": {
+      "product_name": "dry cell battery",
+      "product_category": "battery"
+    },
+    "expected_candidate_standard_ids": ["IS 6303"],
+    "relevance_labels": {
+      "IS 6303": "strong",
+      "IS 14257": "weak",
+      "IS 4985": "not_relevant"
+    },
+    "notes": "IS 6303 specifies primary batteries."
+  },
+  {
+    "product_id": "PROD-023",
+    "product_description": "Transparent float glass for building architectural glazing panels",
+    "explicit_characteristics": {
+      "product_name": "float glass",
+      "product_category": "glass",
+      "material": "glass",
+      "intended_use": "industrial"
+    },
+    "expected_candidate_standard_ids": ["IS 14900", "IS 2835"],
+    "relevance_labels": {
+      "IS 14900": "strong",
+      "IS 2835": "strong",
+      "IS 8112": "not_relevant"
+    },
+    "notes": "IS 14900 specifies transparent float glass; IS 2835 specifies flat transparent sheet glass."
+  },
+  {
+    "product_id": "PROD-024",
+    "product_description": "Compostable and biodegradable plastic carry bags and films",
+    "explicit_characteristics": {
+      "product_name": "biodegradable plastic bags",
+      "product_category": "plastic bags",
+      "material": "polyethylene"
+    },
+    "expected_candidate_standard_ids": ["IS 17088"],
+    "relevance_labels": {
+      "IS 17088": "strong",
+      "IS 14534": "possible",
+      "IS 3055": "not_relevant"
+    },
+    "notes": "IS 17088 specifies compostable plastics."
+  },
+  {
+    "product_id": "PROD-025",
+    "product_description": "Pre-stressed concrete railway track sleepers for broad gauge tracks",
+    "explicit_characteristics": {
+      "product_name": "concrete sleepers",
+      "product_category": "sleepers",
+      "material": "portland cement",
+      "intended_use": "industrial"
+    },
+    "expected_candidate_standard_ids": ["IS 3903"],
+    "relevance_labels": {
+      "IS 3903": "strong",
+      "IS 8112": "possible",
+      "IS 302-2-3": "not_relevant"
+    },
+    "notes": "IS 3903 covers concrete sleepers for railways."
+  }
+]

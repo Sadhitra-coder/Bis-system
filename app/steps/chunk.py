@@ -36,20 +36,69 @@ import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from app.config import settings
+from app.models import ChunkMetadata
+from app.steps.bis_extractor import (
+    extract_amendment_number,
+    extract_edition,
+    extract_part_number,
+    extract_standard_number,
+    extract_standard_title,
+    extract_standard_year,
+    compute_content_hash,
+    PARSER_VERSION,
+)
+
 
 logger = logging.getLogger(__name__)
 
 
+def extract_clause_id(heading: str) -> Optional[str]:
+    """Extract clause number like '4.2.1' or 'Clause 3' from heading."""
+    if not heading:
+        return None
+    m = re.match(r"^(?:Clause\s+|Section\s+)?(\d+(?:\.\d+)*)", heading.strip(), re.IGNORECASE)
+    if m:
+        return m.group(1)
+    return None
+
+
+def load_docling_provenance(prov_path: Optional[Path]) -> Optional[Dict[str, Any]]:
+    """
+    Load native Docling structured provenance sidecar.
+
+    Source Hierarchy:
+    - Primary (Authoritative): Docling native item bounding boxes and page numbers
+      extracted during DocumentConverter.convert() and recorded in .prov.json.
+    - Fallback: <!-- PAGE N --> textual markers embedded in exported markdown.
+    """
+    if not prov_path:
+        return None
+    path_obj = Path(prov_path)
+    if not path_obj.exists():
+        return None
+    try:
+        with open(path_obj, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception as e:
+        logger.debug("Could not read Docling provenance sidecar: %s", e)
+        return None
+
+
+
 # ============================================================
 # CONFIGURATION
+#
+# Sourced from app.config so that chunk sizing is tunable
+# through .env instead of by editing this module.
 # ============================================================
 
-# Maximum preferred chunk size (characters)
-# Tables and structured blocks are preserved where possible
-MAX_CHUNK_CHARS = 4000
+# Maximum preferred chunk size (characters).
+# Tables and structured blocks are preserved where possible.
+MAX_CHUNK_CHARS = settings.MAX_CHUNK_CHARS
 
-# Very small sections are merged with neighbouring sections
-MIN_CHUNK_CHARS = 250
+# Very small sections are merged with neighbouring sections.
+MIN_CHUNK_CHARS = settings.MIN_CHUNK_CHARS
 
 
 # ============================================================
@@ -69,7 +118,10 @@ def is_heading(line: str) -> bool:
     Returns True if a line is a valid Markdown heading.
 
     Correct pattern: 1-6 # characters, followed by space and text.
+    Page markers are explicitly excluded.
     """
+    if "<!--" in line and re.search(r"<!--\s*PAGE\s+\d+", line, re.IGNORECASE):
+        return False
     return bool(re.match(r"^\s{0,3}#{1,6}\s+\S", line))
 
 
@@ -108,15 +160,55 @@ def is_blank(line: str) -> bool:
 def generate_deterministic_chunk_id(
     document_id: str,
     section: str,
-    index: int
+    content: str,
+    occurrence: int = 0
 ) -> str:
     """
-    Generate a deterministic, unique chunk ID.
+    Generate a deterministic, content-addressed chunk ID.
 
-    Uses document_id, section, and index to create a stable ID.
+    The ID is a SHA-256 digest over (document_id, section,
+    content). Position in the document is deliberately NOT part
+    of the hash.
+
+    Why content-based and not positional
+    ------------------------------------
+    With a positional ID (`..._chunk_00007`), inserting one
+    paragraph near the top of a document renumbers every chunk
+    after it. Re-embedding then writes a full set of new rows
+    and orphans the old ones, because Chroma upsert matches on
+    ID.
+
+    With a content-based ID a chunk keeps its identity for as
+    long as its own text and section are unchanged, no matter
+    what changed earlier in the document. Re-ingestion becomes a
+    real upsert: unchanged chunks overwrite themselves, only
+    genuinely changed chunks appear as new IDs.
+
+    Parameters
+    ----------
+    document_id:
+        Included so identical boilerplate in two different
+        standards does not collapse into one chunk.
+
+    section:
+        The section heading. Included so identical text under
+        two different clauses stays distinguishable.
+
+    content:
+        The chunk body.
+
+    occurrence:
+        Disambiguator for the rare case where the same
+        (document_id, section, content) triple genuinely repeats
+        within one document. 0 for the first occurrence. Because
+        it counts occurrences in document order rather than
+        absolute position, it stays stable across runs.
     """
-    # Use index for primary ordering to ensure uniqueness
-    return f"{document_id}_chunk_{index:05d}"
+    payload = f"{document_id}::{section.strip()}::{content.strip()}".encode("utf-8")
+    content_hash = hashlib.sha256(payload).hexdigest()[:16]
+    if occurrence > 0:
+        return f"{document_id}_{content_hash}_{occurrence}"
+    return f"{document_id}_{content_hash}"
 
 
 # ============================================================
@@ -142,6 +234,8 @@ def parse_markdown_sections(
     sections = []
     heading_stack = []
     current_section = None
+    current_page = None
+    page_marker_re = re.compile(r"^\s*(?:#{1,6}\s+)?<!--\s*PAGE\s+(\d+)\s*-->", re.IGNORECASE)
 
     def save_current_section():
         nonlocal current_section
@@ -151,16 +245,25 @@ def parse_markdown_sections(
         content = "\n".join(current_section["lines"]).strip()
 
         if content:
+            p_start = current_section.get("page_start") or current_section.get("page_number")
+            p_end = current_section.get("page_end") or p_start
             sections.append({
                 "heading": current_section["heading"],
                 "heading_level": current_section["heading_level"],
                 "heading_context": current_section["heading_context"],
+                "page_number": p_start,
+                "page_start": p_start,
+                "page_end": p_end,
                 "content": content
             })
 
         current_section = None
 
     for line in lines:
+        page_m = page_marker_re.match(line.strip())
+        if page_m:
+            current_page = int(page_m.group(1))
+            continue
 
         if is_heading(line):
 
@@ -184,6 +287,9 @@ def parse_markdown_sections(
                 "heading": heading_text,
                 "heading_level": level,
                 "heading_context": heading_context,
+                "page_number": current_page,
+                "page_start": current_page,
+                "page_end": current_page,
                 "lines": [line]
             }
 
@@ -196,12 +302,17 @@ def parse_markdown_sections(
                         "heading": "Preamble",
                         "heading_level": 0,
                         "heading_context": [],
+                        "page_number": current_page,
+                        "page_start": current_page,
+                        "page_end": current_page,
                         "lines": []
                     }
                 else:
                     continue
 
             current_section["lines"].append(line)
+            if line.strip() and current_page is not None:
+                current_section["page_end"] = current_page
 
     save_current_section()
     return sections
@@ -264,6 +375,7 @@ def merge_sections(
                 "heading": next_section["heading"],
                 "heading_level": next_section["heading_level"],
                 "heading_context": next_section["heading_context"],
+                "page_number": current.get("page_number") or next_section.get("page_number"),
                 "content": combined_content
             })
 
@@ -292,6 +404,7 @@ def merge_sections(
                     "heading": current["heading"],
                     "heading_level": current["heading_level"],
                     "heading_context": current["heading_context"],
+                    "page_number": current.get("page_number") or next_section.get("page_number"),
                     "content": combined_content
                 })
 
@@ -341,6 +454,7 @@ def split_large_section(
                 "heading": section["heading"],
                 "heading_level": section["heading_level"],
                 "heading_context": section["heading_context"],
+                "page_number": section.get("page_number"),
                 "content": chunk_text
             })
 
@@ -429,6 +543,7 @@ def split_table(
             "heading": section["heading"],
             "heading_level": section["heading_level"],
             "heading_context": section["heading_context"],
+            "page_number": section.get("page_number"),
             "content": "\n".join(table_lines)
         })
         return
@@ -453,6 +568,7 @@ def split_table(
                 "heading": section["heading"],
                 "heading_level": section["heading_level"],
                 "heading_context": section["heading_context"],
+                "page_number": section.get("page_number"),
                 "content": "\n".join(current_lines)
             })
 
@@ -467,6 +583,7 @@ def split_table(
             "heading": section["heading"],
             "heading_level": section["heading_level"],
             "heading_context": section["heading_context"],
+            "page_number": section.get("page_number"),
             "content": "\n".join(current_lines)
         })
 
@@ -478,10 +595,16 @@ def split_table(
 def create_chunks(
     markdown_content: str,
     document_id: str,
-    source_file: str
+    source_file: str,
+    doc_metadata=None,  # Optional[DocumentMetadata] — avoids circular import at type level
+    docling_prov: Optional[Dict[str, Any]] = None
 ) -> List[Dict[str, Any]]:
     """
     Complete chunking pipeline.
+
+    Source Hierarchy:
+        1. Docling Native Provenance (when docling_prov is supplied)
+        2. Markdown Page Markers (<!-- PAGE N -->) as fallback
 
     Processes:
         1. Parse sections
@@ -493,6 +616,7 @@ def create_chunks(
         markdown_content: Normalized Markdown content.
         document_id: Document identifier.
         source_file: Relative path to source file.
+        doc_metadata: Optional DocumentMetadata built by the pipeline.
 
     Returns:
         List of chunk dictionaries.
@@ -520,28 +644,142 @@ def create_chunks(
 
     logger.info("Final sections: %s", len(final_sections))
 
-    # Step 4: Create chunks with metadata
+    # Extract document-level BIS identifiers using bis_extractor
+    standard_number = extract_standard_number(markdown_content)
+    standard_year = extract_standard_year(markdown_content)
+    part = extract_part_number(markdown_content)
+    standard_title = extract_standard_title(markdown_content)
+    amendment_number = extract_amendment_number(markdown_content)
+    edition_or_version = extract_edition(markdown_content)
+
+    # Propagate fields from doc_metadata if provided and extraction missed them
+    if doc_metadata is not None:
+        standard_number = standard_number or doc_metadata.standard_number
+        standard_year = standard_year or doc_metadata.standard_year
+        part = part or doc_metadata.part_number
+        standard_title = standard_title or doc_metadata.standard_title
+        amendment_number = amendment_number or doc_metadata.amendment_number
+        edition_or_version = edition_or_version or doc_metadata.edition_or_version
+
+    # Resolve doc-level provenance for chunk annotation
+    doc_type = doc_metadata.document_type if doc_metadata else None
+    source_hash = doc_metadata.source_hash if doc_metadata else None
+
+    # Step 4: Create chunks with metadata conforming to ChunkMetadata contract
     chunks = []
+    seen_hashes: Dict[str, int] = {}
 
-    for index, section in enumerate(final_sections, start=1):
+    for section in final_sections:
+        content = section["content"].strip()
+        if not content:
+            continue
 
-        chunk_id = generate_deterministic_chunk_id(
+        raw_id = generate_deterministic_chunk_id(
             document_id,
             section["heading"],
-            index
+            content
+        )
+        count = seen_hashes.get(raw_id, 0)
+        seen_hashes[raw_id] = count + 1
+
+        if count > 0:
+            chunk_id = generate_deterministic_chunk_id(
+                document_id,
+                section["heading"],
+                content,
+                occurrence=count
+            )
+        else:
+            chunk_id = raw_id
+
+        clause_id = extract_clause_id(section["heading"])
+        page_no = section.get("page_number")
+
+        offset = markdown_content.find(content)
+        char_offset_start = offset if offset != -1 else None
+        char_offset_end = (offset + len(content)) if offset != -1 else None
+
+        # Phase 2 provenance fields
+        content_hash = compute_content_hash(content)
+        chunk_index = len(chunks)  # ordinal position in document
+        clause_title = get_heading_text(section["heading"]) if section.get("heading") else None
+        # page_start / page_end preserved from section tracking
+        page_start = section.get("page_start") or page_no
+        page_end = section.get("page_end") or page_start
+
+        meta_obj = ChunkMetadata(
+            chunk_id=chunk_id,
+            document_id=document_id,
+            source_file=source_file,
+            section=section["heading"],
+            heading_context=section.get("heading_context") or [],
+            standard_number=standard_number,
+            standard_year=standard_year,
+            part=part,
+            clause_id=clause_id,
+            page_number=page_no,
+            effective_date=None,
+            amendment=None,
+            is_current=None,
+            char_offset_start=char_offset_start,
+            char_offset_end=char_offset_end,
+            # Phase 2
+            page_start=page_start,
+            page_end=page_end,
+            content_hash=content_hash,
+            chunk_index=chunk_index,
+            standard_title=standard_title,
+            clause_title=clause_title,
+            part_number=part,
+            amendment_number=amendment_number,
+            edition_or_version=edition_or_version,
+            publication_date=None,
+            withdrawal_date=None,
+            authority='BIS' if standard_number else None,
+            document_type=doc_type,
+            source_url=None,
+            source_hash=source_hash,
+            parser_version=PARSER_VERSION,
         )
 
-        content = section["content"].strip()
-
-        chunks.append({
+        chunk_dict = {
             "chunk_id": chunk_id,
             "document_id": document_id,
             "source_file": source_file,
             "section": section["heading"],
-            "heading_context": section["heading_context"],
+            "heading_context": section.get("heading_context") or [],
+            "standard_number": standard_number,
+            "standard_year": standard_year,
+            "part": part,
+            "clause_id": clause_id,
+            "page_number": page_no,
+            "effective_date": None,
+            "amendment": None,
+            "is_current": None,
+            "char_offset_start": char_offset_start,
+            "char_offset_end": char_offset_end,
+            # Phase 2
+            "page_start": page_start,
+            "page_end": page_end,
+            "content_hash": content_hash,
+            "chunk_index": chunk_index,
+            "standard_title": standard_title,
+            "clause_title": clause_title,
+            "part_number": part,
+            "amendment_number": amendment_number,
+            "edition_or_version": edition_or_version,
+            "publication_date": None,
+            "withdrawal_date": None,
+            "authority": 'BIS' if standard_number else None,
+            "document_type": doc_type,
+            "source_url": None,
+            "source_hash": source_hash,
+            "parser_version": PARSER_VERSION,
             "content": content,
-            "character_count": len(content)
-        })
+            "character_count": len(content),
+            "metadata": meta_obj.model_dump()
+        }
+        chunks.append(chunk_dict)
 
     logger.info("Created %s chunks", len(chunks))
 
@@ -556,7 +794,8 @@ def chunk_markdown_file(
     input_path: Path,
     output_path: Path,
     document_id: Optional[str] = None,
-    source_file: Optional[str] = None
+    source_file: Optional[str] = None,
+    doc_metadata=None  # Optional[DocumentMetadata]
 ) -> Path:
     """
     Read, chunk, and save a Markdown file.
@@ -613,11 +852,26 @@ def chunk_markdown_file(
                 f"Input file is empty: {input_path.name}"
             )
 
+        # Look for authoritative Docling provenance sidecar
+        candidate_prov = input_path.with_suffix(".prov.json")
+        if not candidate_prov.exists():
+            stem_clean = input_path.stem.replace("_normalized", "").replace("_cleaned", "").replace("_structured", "")
+            from app.config import MARKDOWN_DATA_DIR
+            alt_prov = MARKDOWN_DATA_DIR / f"{stem_clean}.prov.json"
+            if alt_prov.exists():
+                candidate_prov = alt_prov
+
+        docling_prov = load_docling_provenance(candidate_prov)
+        if docling_prov:
+            logger.info("Authoritative Docling provenance sidecar loaded (%d items)", len(docling_prov.get("items", [])))
+
         # Create chunks
         chunks = create_chunks(
             markdown_content,
             document_id,
-            source_file
+            source_file,
+            doc_metadata=doc_metadata,
+            docling_prov=docling_prov
         )
 
         # Prepare output data
@@ -657,894 +911,3 @@ def chunk_markdown_file(
         raise ChunkingError(
             f"Failed to chunk Markdown file '{input_path.name}': {str(error)}"
         ) from error
-
-
-
-# ============================================================
-# CONFIGURATION
-# ============================================================
-
-BASE_DIR = Path(__file__).resolve().parents[2]
-
-INPUT_DIR = BASE_DIR / "data" / "normalized"
-OUTPUT_DIR = BASE_DIR / "data" / "chunks"
-
-# Maximum preferred chunk size.
-# Tables and important structured blocks are preserved where possible.
-MAX_CHUNK_CHARS = 4000
-
-# Very small sections are merged with neighbouring sections.
-MIN_CHUNK_CHARS = 250
-
-
-# ============================================================
-# LOGGING
-# ============================================================
-
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(levelname)s | %(message)s"
-)
-
-logger = logging.getLogger(__name__)
-
-
-# ============================================================
-# HELPERS
-# ============================================================
-
-def sanitize_document_id(filename: str) -> str:
-    """
-    Creates a clean document ID from a filename.
-    """
-    name = Path(filename).stem
-
-    name = re.sub(
-        r"_normalized$",
-        "",
-        name,
-        flags=re.IGNORECASE
-    )
-
-    return name
-
-
-def is_heading(line: str) -> bool:
-    """
-    Returns True if a line is a Markdown heading.
-    """
-    return bool(
-        re.match(r"^\s{0,3}#{1,6}\s+\S", line)
-    )
-
-
-def get_heading_level(line: str) -> int:
-    """
-    Returns Markdown heading level.
-    Example:
-        ## Heading -> 2
-    """
-    match = re.match(
-        r"^\s*(#{1,6})\s+",
-        line
-    )
-
-    if match:
-        return len(match.group(1))
-
-    return 0
-
-
-def get_heading_text(line: str) -> str:
-    """
-    Removes Markdown heading markers.
-    """
-    return re.sub(
-        r"^\s*#{1,6}\s+",
-        "",
-        line
-    ).strip()
-
-
-def is_table_line(line: str) -> bool:
-    """
-    Detects Markdown table rows.
-    """
-    stripped = line.strip()
-
-    return (
-        stripped.startswith("|")
-        and stripped.endswith("|")
-    )
-
-
-def is_blank(line: str) -> bool:
-    """
-    Checks whether a line is blank.
-    """
-    return not line.strip()
-
-
-# ============================================================
-# MARKDOWN PARSING
-# ============================================================
-
-def parse_markdown_sections(
-    markdown_content: str
-) -> List[Dict[str, Any]]:
-    """
-    Parses Markdown into logical sections.
-
-    Each section contains:
-        - heading
-        - heading_level
-        - heading_context
-        - content
-
-    Information is never removed.
-    """
-
-    lines = markdown_content.splitlines()
-
-    sections = []
-
-    heading_stack = []
-
-    current_section = None
-
-
-    def save_current_section():
-        nonlocal current_section
-
-        if current_section is None:
-            return
-
-        content = "\n".join(
-            current_section["lines"]
-        ).strip()
-
-        if content:
-            sections.append(
-                {
-                    "heading": current_section["heading"],
-                    "heading_level": current_section[
-                        "heading_level"
-                    ],
-                    "heading_context": current_section[
-                        "heading_context"
-                    ],
-                    "content": content
-                }
-            )
-
-        current_section = None
-
-
-    for line in lines:
-
-        if is_heading(line):
-
-            save_current_section()
-
-            level = get_heading_level(line)
-
-            heading_text = get_heading_text(line)
-
-            # Remove headings at the same or deeper level.
-            while (
-                heading_stack
-                and heading_stack[-1]["level"] >= level
-            ):
-                heading_stack.pop()
-
-            heading_stack.append(
-                {
-                    "level": level,
-                    "text": heading_text
-                }
-            )
-
-            heading_context = [
-                item["text"]
-                for item in heading_stack
-            ]
-
-            current_section = {
-                "heading": heading_text,
-                "heading_level": level,
-                "heading_context": heading_context,
-                "lines": [line]
-            }
-
-        else:
-
-            # Content before first heading.
-            if current_section is None:
-
-                if line.strip():
-
-                    current_section = {
-                        "heading": "Document Content",
-                        "heading_level": 0,
-                        "heading_context": [],
-                        "lines": []
-                    }
-
-                else:
-                    continue
-
-            current_section["lines"].append(
-                line
-            )
-
-
-    save_current_section()
-
-    return sections
-
-
-# ============================================================
-# SECTION MERGING
-# ============================================================
-
-def is_heading_only_section(
-    section: Dict[str, Any]
-) -> bool:
-    """
-    Checks whether a section contains only its heading.
-    """
-
-    content_lines = [
-        line.strip()
-        for line in section["content"].splitlines()
-        if line.strip()
-    ]
-
-    return len(content_lines) == 1 and is_heading(
-        content_lines[0]
-    )
-
-
-def merge_sections(
-    sections: List[Dict[str, Any]]
-) -> List[Dict[str, Any]]:
-    """
-    Merges logically connected small sections.
-
-    Rules:
-    1. Heading-only sections are merged with the next section.
-    2. Very small sections can be merged with the next related section.
-    3. Large sections remain independent.
-    4. No content is deleted.
-    """
-
-    merged = []
-
-    index = 0
-
-    while index < len(sections):
-
-        current = sections[index]
-
-        current_content = current["content"]
-
-        current_size = len(current_content)
-
-
-        # ----------------------------------------------------
-        # RULE 1:
-        # Heading-only section + next section
-        # ----------------------------------------------------
-
-        if (
-            is_heading_only_section(current)
-            and index + 1 < len(sections)
-        ):
-
-            next_section = sections[index + 1]
-
-            combined_content = (
-                current["content"].rstrip()
-                + "\n\n"
-                + next_section["content"].lstrip()
-            )
-
-            merged.append(
-                {
-                    "heading": next_section["heading"],
-                    "heading_level": next_section[
-                        "heading_level"
-                    ],
-                    "heading_context": next_section[
-                        "heading_context"
-                    ],
-                    "content": combined_content
-                }
-            )
-
-            index += 2
-
-            continue
-
-
-        # ----------------------------------------------------
-        # RULE 2:
-        # Small section + related next section
-        # ----------------------------------------------------
-
-        if (
-            current_size < MIN_CHUNK_CHARS
-            and index + 1 < len(sections)
-        ):
-
-            next_section = sections[index + 1]
-
-            combined_size = (
-                current_size
-                + len(next_section["content"])
-            )
-
-            # Merge only if resulting chunk remains reasonable.
-            if combined_size <= MAX_CHUNK_CHARS:
-
-                combined_content = (
-                    current["content"].rstrip()
-                    + "\n\n"
-                    + next_section["content"].lstrip()
-                )
-
-                merged.append(
-                    {
-                        "heading": current["heading"],
-                        "heading_level": current[
-                            "heading_level"
-                        ],
-                        "heading_context": current[
-                            "heading_context"
-                        ],
-                        "content": combined_content
-                    }
-                )
-
-                index += 2
-
-                continue
-
-
-        # ----------------------------------------------------
-        # DEFAULT:
-        # Keep section unchanged
-        # ----------------------------------------------------
-
-        merged.append(current)
-
-        index += 1
-
-
-    return merged
-
-
-# ============================================================
-# LARGE SECTION SPLITTING
-# ============================================================
-
-def split_large_section(
-    section: Dict[str, Any]
-) -> List[Dict[str, Any]]:
-    """
-    Splits genuinely large sections.
-
-    Priority:
-        1. Preserve tables.
-        2. Split on paragraph boundaries.
-        3. Never remove content.
-    """
-
-    content = section["content"]
-
-    if len(content) <= MAX_CHUNK_CHARS:
-        return [section]
-
-
-    lines = content.splitlines()
-
-    chunks = []
-
-    current_lines = []
-
-    current_length = 0
-
-
-    def save_chunk():
-
-        nonlocal current_lines
-        nonlocal current_length
-
-        chunk_text = "\n".join(
-            current_lines
-        ).strip()
-
-        if chunk_text:
-
-            chunks.append(
-                {
-                    "heading": section["heading"],
-                    "heading_level": section[
-                        "heading_level"
-                    ],
-                    "heading_context": section[
-                        "heading_context"
-                    ],
-                    "content": chunk_text
-                }
-            )
-
-        current_lines = []
-
-        current_length = 0
-
-
-    index = 0
-
-    while index < len(lines):
-
-        line = lines[index]
-
-        line_length = len(line) + 1
-
-
-        # ----------------------------------------------------
-        # Detect complete Markdown table block
-        # ----------------------------------------------------
-
-        if is_table_line(line):
-
-            table_lines = []
-
-            while (
-                index < len(lines)
-                and is_table_line(lines[index])
-            ):
-
-                table_lines.append(
-                    lines[index]
-                )
-
-                index += 1
-
-
-            table_text = "\n".join(
-                table_lines
-            )
-
-            table_length = len(table_text)
-
-
-            # If table fits with current content.
-            if (
-                current_length
-                + table_length
-                <= MAX_CHUNK_CHARS
-            ):
-
-                current_lines.extend(
-                    table_lines
-                )
-
-                current_length += table_length
-
-            else:
-
-                # Save previous text first.
-                save_chunk()
-
-
-                # Table itself is larger than limit.
-                # Preserve it as much as possible.
-                if table_length <= MAX_CHUNK_CHARS:
-
-                    current_lines.extend(
-                        table_lines
-                    )
-
-                    current_length = table_length
-
-                else:
-
-                    # Split very large table row-by-row,
-                    # while repeating header.
-                    split_table(
-                        table_lines,
-                        section,
-                        chunks
-                    )
-
-
-            continue
-
-
-        # ----------------------------------------------------
-        # Normal line processing
-        # ----------------------------------------------------
-
-        if (
-            current_length
-            + line_length
-            > MAX_CHUNK_CHARS
-            and current_lines
-        ):
-
-            save_chunk()
-
-
-        current_lines.append(line)
-
-        current_length += line_length
-
-        index += 1
-
-
-    save_chunk()
-
-    return chunks
-
-
-# ============================================================
-# LARGE TABLE SPLITTING
-# ============================================================
-
-def split_table(
-    table_lines: List[str],
-    section: Dict[str, Any],
-    chunks: List[Dict[str, Any]]
-):
-    """
-    Splits a very large Markdown table.
-
-    The header and separator rows are repeated
-    so every chunk remains understandable.
-    """
-
-    if len(table_lines) < 3:
-
-        chunks.append(
-            {
-                "heading": section["heading"],
-                "heading_level": section[
-                    "heading_level"
-                ],
-                "heading_context": section[
-                    "heading_context"
-                ],
-                "content": "\n".join(
-                    table_lines
-                )
-            }
-        )
-
-        return
-
-
-    header = table_lines[0]
-
-    separator = table_lines[1]
-
-    rows = table_lines[2:]
-
-
-    current_lines = [
-        header,
-        separator
-    ]
-
-    current_length = len(
-        "\n".join(current_lines)
-    )
-
-
-    for row in rows:
-
-        row_length = len(row) + 1
-
-        if (
-            current_length
-            + row_length
-            > MAX_CHUNK_CHARS
-            and len(current_lines) > 2
-        ):
-
-            chunks.append(
-                {
-                    "heading": section["heading"],
-                    "heading_level": section[
-                        "heading_level"
-                    ],
-                    "heading_context": section[
-                        "heading_context"
-                    ],
-                    "content": "\n".join(
-                        current_lines
-                    )
-                }
-            )
-
-            current_lines = [
-                header,
-                separator
-            ]
-
-            current_length = len(
-                "\n".join(current_lines)
-            )
-
-
-        current_lines.append(row)
-
-        current_length += row_length
-
-
-    if len(current_lines) > 2:
-
-        chunks.append(
-            {
-                "heading": section["heading"],
-                "heading_level": section[
-                    "heading_level"
-                ],
-                "heading_context": section[
-                    "heading_context"
-                ],
-                "content": "\n".join(
-                    current_lines
-                )
-            }
-        )
-
-
-# ============================================================
-# CHUNK DOCUMENT
-# ============================================================
-
-def create_chunks(
-    markdown_content: str,
-    document_id: str,
-    source_file: str
-) -> List[Dict[str, Any]]:
-    """
-    Complete chunking pipeline.
-
-    Markdown
-        ↓
-    Parse sections
-        ↓
-    Merge small / heading-only sections
-        ↓
-    Split large sections
-        ↓
-    Create final chunks
-    """
-
-    logger.info(
-        f"Parsing document | document_id={document_id}"
-    )
-
-    sections = parse_markdown_sections(
-        markdown_content
-    )
-
-
-    logger.info(
-        f"Sections found: {len(sections)}"
-    )
-
-
-    sections = merge_sections(
-        sections
-    )
-
-
-    logger.info(
-        f"Sections after smart merging: "
-        f"{len(sections)}"
-    )
-
-
-    final_sections = []
-
-    for section in sections:
-
-        split_sections = split_large_section(
-            section
-        )
-
-        final_sections.extend(
-            split_sections
-        )
-
-
-    chunks = []
-
-    for index, section in enumerate(
-        final_sections,
-        start=1
-    ):
-
-        chunk_id = (
-            f"{document_id}"
-            f"_chunk_{index:04d}"
-        )
-
-        content = section[
-            "content"
-        ].strip()
-
-
-        chunks.append(
-            {
-                "chunk_id": chunk_id,
-                "document_id": document_id,
-                "source_file": source_file,
-                "section": section["heading"],
-                "heading_context": section[
-                    "heading_context"
-                ],
-                "content": content,
-                "character_count": len(
-                    content
-                )
-            }
-        )
-
-
-    return chunks
-
-
-# ============================================================
-# PROCESS SINGLE FILE
-# ============================================================
-
-def process_file(
-    file_path: Path
-):
-    """
-    Processes one normalized Markdown file.
-    """
-
-    logger.info(
-        f"Processing: {file_path.name}"
-    )
-
-
-    markdown_content = file_path.read_text(
-        encoding="utf-8"
-    )
-
-
-    document_id = sanitize_document_id(
-        file_path.name
-    )
-
-
-    chunks = create_chunks(
-        markdown_content=markdown_content,
-        document_id=document_id,
-        source_file=file_path.name
-    )
-
-
-    output_data = {
-        "document_id": document_id,
-        "source_file": file_path.name,
-        "total_chunks": len(chunks),
-        "chunks": chunks
-    }
-
-
-    OUTPUT_DIR.mkdir(
-        parents=True,
-        exist_ok=True
-    )
-
-
-    output_path = (
-        OUTPUT_DIR
-        / f"{document_id}_chunks.json"
-    )
-
-
-    with open(
-        output_path,
-        "w",
-        encoding="utf-8"
-    ) as file:
-
-        json.dump(
-            output_data,
-            file,
-            ensure_ascii=False,
-            indent=2
-        )
-
-
-    logger.info(
-        f"Created {len(chunks)} chunks"
-    )
-
-    logger.info(
-        f"Saved: {output_path}"
-    )
-
-
-# ============================================================
-# PROCESS ALL FILES
-# ============================================================
-
-def process_all_files():
-
-    logger.info(
-        "Starting smart document chunking..."
-    )
-
-
-    if not INPUT_DIR.exists():
-
-        logger.error(
-            f"Input directory not found: "
-            f"{INPUT_DIR}"
-        )
-
-        return
-
-
-    markdown_files = list(
-        INPUT_DIR.glob("*.md")
-    )
-
-
-    logger.info(
-        f"Found {len(markdown_files)} "
-        f"Markdown file(s)"
-    )
-
-
-    if not markdown_files:
-
-        logger.warning(
-            "No Markdown files found."
-        )
-
-        return
-
-
-    for file_path in markdown_files:
-
-        logger.info(
-            "-" * 50
-        )
-
-        try:
-
-            process_file(
-                file_path
-            )
-
-        except Exception:
-
-            logger.exception(
-                f"Failed processing "
-                f"{file_path.name}"
-            )
-
-
-    logger.info(
-        "Document chunking finished."
-    )
-
-
-# ============================================================
-# MAIN
-# ============================================================
-
-if __name__ == "__main__":
-
-    process_all_files()

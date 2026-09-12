@@ -1,0 +1,137 @@
+[
+  {
+    "scenario_id": "tender_01_water_tank_capacity",
+    "tender_clause": "Nominal storage capacity shall be at least 500 L.",
+    "standard_number": "IS 12701",
+    "standard_requirement": "Nominal storage capacity shall not be less than 500 L.",
+    "expected_gap_state": "MATCH",
+    "expected_category": "capacity",
+    "notes": "Direct match on physical parameter capacity."
+  },
+  {
+    "scenario_id": "tender_02_temperature_conflict",
+    "tender_clause": "Operating temperature must be up to 60 °C.",
+    "standard_number": "IS 302-2-201",
+    "standard_requirement": "Maximum operating temperature shall not exceed 40 °C.",
+    "expected_gap_state": "CONFLICT",
+    "expected_category": "performance",
+    "notes": "Tender requests 60 °C, which exceeds the standard limit of 40 °C."
+  },
+  {
+    "scenario_id": "tender_03_salt_spray_test_gap",
+    "tender_clause": "Salt spray corrosion testing for 1000 hours is strictly required.",
+    "standard_number": "IS 12701",
+    "standard_requirement": "Tensile strength shall not be less than 20 MPa.",
+    "expected_gap_state": "GAP",
+    "expected_category": "test",
+    "notes": "Salt spray test is not mentioned in IS 12701 standard requirements."
+  },
+  {
+    "scenario_id": "tender_04_isi_mark_requested",
+    "tender_clause": "Valid BIS license and ISI mark as per IS 12701 is mandatory.",
+    "standard_number": "IS 12701",
+    "standard_requirement": "Product conformance shall be verified as per IS 12701.",
+    "expected_gap_state": "MATCH",
+    "expected_category": "certification",
+    "notes": "Certification requirement references valid standard."
+  },
+  {
+    "scenario_id": "tender_05_dimension_tolerance_match",
+    "tender_clause": "Wall thickness shall be 10 ± 0.5 mm.",
+    "standard_number": "IS 2062",
+    "standard_requirement": "Nominal thickness shall be 10 ± 0.5 mm.",
+    "expected_gap_state": "MATCH",
+    "expected_category": "dimension",
+    "notes": "Tolerance and nominal thickness match standard."
+  },
+  {
+    "scenario_id": "tender_06_dimension_conflict",
+    "tender_clause": "External diameter shall be 50 mm.",
+    "standard_number": "IS 4984",
+    "standard_requirement": "External diameter shall not exceed 32 mm.",
+    "expected_gap_state": "CONFLICT",
+    "expected_category": "dimension",
+    "notes": "Tender diameter exceeds standard maximum threshold."
+  },
+  {
+    "scenario_id": "tender_07_material_grade_match",
+    "tender_clause": "Material shall be High Density Polyethylene grade.",
+    "standard_number": "IS 12701",
+    "standard_requirement": "Material shall be virgin food grade polyethylene.",
+    "expected_gap_state": "MATCH",
+    "expected_category": "material",
+    "notes": "Material category match with standard clause."
+  },
+  {
+    "scenario_id": "tender_08_incompatible_unit",
+    "tender_clause": "Hydrostatic pressure rating shall be 150 mm.",
+    "standard_number": "IS 447",
+    "standard_requirement": "Working pressure shall be at least 10 bar.",
+    "expected_gap_state": "UNVERIFIED",
+    "expected_category": "performance",
+    "notes": "Pressure expressed in length unit 'mm' cannot be verified."
+  },
+  {
+    "scenario_id": "tender_09_nabl_report_doc",
+    "tender_clause": "Routine test report from NABL accredited laboratory must be submitted.",
+    "standard_number": "IS 12701",
+    "standard_requirement": "Routine test report and inspection records shall be maintained.",
+    "expected_gap_state": "MATCH",
+    "expected_category": "documentation",
+    "notes": "Documentation requirement matches standard clause."
+  },
+  {
+    "scenario_id": "tender_10_hydraulic_test_pressure",
+    "tender_clause": "Hydraulic test pressure shall be at least 15 bar.",
+    "standard_number": "IS 2825",
+    "standard_requirement": "Hydraulic test pressure shall be at least 15 bar.",
+    "expected_gap_state": "MATCH",
+    "expected_category": "test",
+    "notes": "Exact pressure and test match."
+  },
+  {
+    "scenario_id": "tender_11_warranty_gap",
+    "tender_clause": "Comprehensive onsite warranty for 5 years is mandatory.",
+    "standard_number": "IS 12701",
+    "standard_requirement": "Nominal storage capacity shall not be less than 500 L.",
+    "expected_gap_state": "GAP",
+    "expected_category": "documentation",
+    "notes": "Commercial warranty is absent from technical standard."
+  },
+  {
+    "scenario_id": "tender_12_delivery_schedule_gap",
+    "tender_clause": "Delivery timeline shall not exceed 4 weeks from order.",
+    "standard_number": "IS 12701",
+    "standard_requirement": "Nominal storage capacity shall not be less than 500 L.",
+    "expected_gap_state": "GAP",
+    "expected_category": "general",
+    "notes": "Commercial delivery term absent from technical standard."
+  },
+  {
+    "scenario_id": "tender_13_efficiency_match",
+    "tender_clause": "Motor efficiency shall be at least 90 %.",
+    "standard_number": "IS 12615",
+    "standard_requirement": "Motor efficiency shall be at least 85 %.",
+    "expected_gap_state": "MATCH",
+    "expected_category": "performance",
+    "notes": "Tender requirement satisfies and exceeds standard minimum threshold."
+  },
+  {
+    "scenario_id": "tender_14_noise_level_match",
+    "tender_clause": "Acoustic noise level shall not exceed 65 dB.",
+    "standard_number": "IS 1391",
+    "standard_requirement": "Acoustic noise level shall not exceed 70 dB.",
+    "expected_gap_state": "MATCH",
+    "expected_category": "performance",
+    "notes": "Tender maximum 65 dB satisfies standard maximum 70 dB."
+  },
+  {
+    "scenario_id": "tender_15_weight_limit_gap",
+    "tender_clause": "Total unit weight shall not exceed 5 kg.",
+    "standard_number": "IS 302-2-201",
+    "standard_requirement": "Maximum operating temperature shall not exceed 40 °C.",
+    "expected_gap_state": "GAP",
+    "expected_category": "general",
+    "notes": "Weight limitation is not specified in standard."
+  }
+]

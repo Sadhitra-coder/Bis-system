@@ -18,8 +18,18 @@ This module is designed to be generic and reusable:
     - Creates parent directories if needed
 """
 
+import os
 import logging
 from pathlib import Path
+
+# On Windows without Developer Mode, huggingface symlinks fail with WinError 1314.
+# Disabling symlink detection forces copy/move fallback.
+os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
+try:
+    import huggingface_hub.file_download
+    huggingface_hub.file_download.are_symlinks_supported = lambda *args, **kwargs: False
+except Exception:
+    pass
 
 from docling.document_converter import DocumentConverter
 
@@ -87,9 +97,22 @@ def extract_pdf(
         # Docling extraction
         converter = DocumentConverter()
         result = converter.convert(str(input_path))
+        doc = result.document
 
-        # Convert to Markdown
-        markdown = result.document.export_to_markdown()
+        # Export page-by-page to preserve page boundaries in Markdown
+        page_markdowns = []
+        if hasattr(doc, "pages") and doc.pages:
+            for page_no in sorted(doc.pages.keys()):
+                p_md = doc.export_to_markdown(page_no=page_no)
+                if p_md.strip():
+                    page_markdowns.append(f"<!-- PAGE {page_no} -->\n\n" + p_md.strip())
+
+        if not page_markdowns:
+            raw_md = doc.export_to_markdown()
+            if raw_md.strip():
+                page_markdowns.append("<!-- PAGE 1 -->\n\n" + raw_md.strip())
+
+        markdown = "\n\n".join(page_markdowns)
 
         if not markdown.strip():
             raise ExtractorError(
@@ -101,6 +124,34 @@ def extract_pdf(
             markdown,
             encoding="utf-8"
         )
+
+        # Preserve structural provenance sidecar (page count, bounding boxes)
+        try:
+            prov_data = {
+                "document": input_path.name,
+                "page_count": len(doc.pages) if hasattr(doc, "pages") and doc.pages else 1,
+                "items": []
+            }
+            for item, _ in doc.iterate_items():
+                prov = getattr(item, "prov", None)
+                if prov:
+                    p0 = prov[0]
+                    bbox = getattr(p0, "bbox", None)
+                    prov_data["items"].append({
+                        "type": type(item).__name__,
+                        "page_no": getattr(p0, "page_no", None),
+                        "bbox": {
+                            "l": getattr(bbox, "l", 0.0),
+                            "t": getattr(bbox, "t", 0.0),
+                            "r": getattr(bbox, "r", 0.0),
+                            "b": getattr(bbox, "b", 0.0),
+                        } if bbox else None
+                    })
+            prov_path = output_path.with_suffix(".prov.json")
+            import json
+            prov_path.write_text(json.dumps(prov_data, indent=2), encoding="utf-8")
+        except Exception as prov_err:
+            logger.debug("Failed to record provenance sidecar: %s", prov_err)
 
         logger.info(
             "Extraction successful | "

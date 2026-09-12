@@ -42,110 +42,73 @@ Therefore:
 USAGE
 -----
 
-    python structure.py input.md output.json
+    python -m app.steps.structure input.md output.md
+
+    (JSON sidecar is written next to the Markdown output.)
+
+
+PIPELINE CONTRACT
+-----------------
+
+The canonical inter-stage format is MARKDOWN.
+
+    stage 3 structure  -> *_structured.md   (+ *_structured.json sidecar)
+    stage 4 normalize  -> *_normalized.md
+    stage 5 chunk      -> *_chunks.json
+
+structure_markdown_file() renders the semantic block list back
+to Markdown so that normalize and chunk keep working on
+Markdown. The full structured record (blocks, document tree,
+validation, raw text) is written alongside as a JSON sidecar so
+nothing is lost.
 
 
 ENVIRONMENT
 -----------
 
-Project root .env:
-
-    GROQ_API_KEY=your_key
-    GROQ_MODEL=openai/gpt-oss-120b
-
-Optional:
-
-    LLM_ENABLED=true
-
-
-INSTALL
--------
-
-    pip install groq python-dotenv
+All configuration comes from app.config.settings, which reads
+the project .env. See .env.example.
 """
 
 import json
-import os
+import logging
 import re
 import sys
 
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-from dotenv import load_dotenv
+from app.config import BASE_DIR, settings
+from app.llm_client import GroqClient, LLMUnavailableError
+
+
+# ============================================================
+# LOGGING
+# ============================================================
+
+logger = logging.getLogger(__name__)
 
 
 # ============================================================
 # CONFIGURATION
+#
+# All values come from app.config.settings.
+# This module performs no environment lookups of its own.
 # ============================================================
 
-DEFAULT_MODEL = "openai/gpt-oss-120b"
+GROQ_MODEL = settings.GROQ_STRUCTURE_MODEL
 
-DEFAULT_BATCH_SIZE = 20
+DEFAULT_BATCH_SIZE = settings.STRUCTURE_BATCH_SIZE
 
-MAX_LLM_OUTPUT_TOKENS = 8000
+MAX_LLM_OUTPUT_TOKENS = settings.STRUCTURE_MAX_OUTPUT_TOKENS
 
 
 # ============================================================
-# ENVIRONMENT
+# ERRORS
 # ============================================================
 
-def find_project_root(start_path: Optional[Path] = None) -> Path:
-    """
-    Find the project root by searching upward for .env.
-
-    This allows structure.py to work even when executed from
-    a subdirectory such as:
-
-        scripts/structure.py
-    """
-
-    if start_path is None:
-        start_path = Path(__file__).resolve()
-
-    current = start_path.parent
-
-    while True:
-
-        env_path = current / ".env"
-
-        if env_path.exists():
-            return current
-
-        if current.parent == current:
-            break
-
-        current = current.parent
-
-    return Path.cwd()
-
-
-PROJECT_ROOT = find_project_root()
-
-ENV_PATH = PROJECT_ROOT / ".env"
-
-if ENV_PATH.exists():
-    load_dotenv(ENV_PATH, override=False)
-else:
-    load_dotenv(override=False)
-
-
-GROQ_API_KEY = os.getenv("GROQ_API_KEY")
-
-GROQ_MODEL = os.getenv(
-    "GROQ_MODEL",
-    DEFAULT_MODEL
-)
-
-LLM_ENABLED = (
-    os.getenv(
-        "LLM_ENABLED",
-        "true"
-    )
-    .strip()
-    .lower()
-    in ("true", "1", "yes")
-)
+class StructuringError(Exception):
+    """Raised when the structuring stage cannot complete."""
 
 
 # ============================================================
@@ -980,41 +943,39 @@ def parse_blocks(
 
 def initialize_llm():
     """
-    Initialize Groq client.
+    Initialize the shared Groq client.
 
-    Returns:
+    Returns
+    -------
+    (client, error_message)
 
-        client, error_message
+        client is None when the LLM is intentionally disabled
+        (settings.LLM_ENABLED is False) or cannot be used
+        (missing API key). error_message explains which.
+
+    A None client is a CONFIGURATION state, not a failure of an
+    API call. Deliberately disabling the LLM is allowed to fall
+    back to the deterministic classifier. An API call that fails
+    at runtime is handled separately in semantic_structure().
     """
 
-    if not LLM_ENABLED:
+    if not settings.LLM_ENABLED:
 
         return (
             None,
-            "LLM disabled by configuration."
-        )
-
-    if not GROQ_API_KEY:
-
-        return (
-            None,
-            "GROQ_API_KEY not found."
+            "LLM disabled by configuration (LLM_ENABLED=false)."
         )
 
     try:
 
-        from groq import Groq
-
-        client = Groq(
-            api_key=GROQ_API_KEY
-        )
+        client = GroqClient()
 
         return (
             client,
             None
         )
 
-    except Exception as error:
+    except LLMUnavailableError as error:
 
         return (
             None,
@@ -1517,19 +1478,33 @@ def semantic_structure(
 
     # --------------------------------------------------------
     # LLM UNAVAILABLE
+    #
+    # Two distinct cases:
+    #
+    #   1. LLM_ENABLED=false
+    #      Deliberate configuration. Use the deterministic
+    #      classifier and record that the LLM was not used.
+    #
+    #   2. LLM_ENABLED=true but unusable (no API key).
+    #      This is a misconfiguration, not a choice. Refuse to
+    #      pretend the document was structured by the LLM.
     # --------------------------------------------------------
 
     if client is None:
 
-        print("\nWARNING:")
-        print(
-            "Could not initialize LLM."
-        )
-        print(
-            f"Reason: {initialization_error}"
-        )
-        print(
-            "\nUsing Python fallback."
+        if settings.LLM_ENABLED:
+
+            raise StructuringError(
+                "LLM structuring is enabled but the LLM is "
+                f"unavailable: {initialization_error} "
+                "Set LLM_ENABLED=false to structure documents "
+                "with the deterministic classifier instead."
+            )
+
+        logger.warning(
+            "LLM structuring disabled: %s "
+            "Using the deterministic Python classifier.",
+            initialization_error
         )
 
 
@@ -1546,7 +1521,9 @@ def semantic_structure(
                 "enabled": False,
                 "used": False,
                 "model": GROQ_MODEL,
-                "reason": initialization_error
+                "reason": initialization_error,
+                "llm_batches_used": 0,
+                "fallback_batches": 0
             }
         )
 
@@ -1583,9 +1560,11 @@ def semantic_structure(
         ) + 1
 
 
-        print(
-            f"\n      LLM batch "
-            f"{batch_number}..."
+        logger.info(
+            "LLM structuring batch %d "
+            "(%d blocks).",
+            batch_number,
+            len(batch)
         )
 
 
@@ -1596,9 +1575,11 @@ def semantic_structure(
 
         try:
 
-            completion = (
-                client.chat.completions.create(
-                    model=GROQ_MODEL,
+            # GroqClient handles retry / backoff for
+            # transient failures. Anything raised here is
+            # already unrecoverable.
+            response_text = (
+                client.chat_completion(
                     messages=[
                         {
                             "role": "system",
@@ -1612,30 +1593,19 @@ def semantic_structure(
                             "content": prompt
                         }
                     ],
+                    model=GROQ_MODEL,
                     temperature=0,
                     max_completion_tokens=(
                         MAX_LLM_OUTPUT_TOKENS
                     ),
                     response_format={
                         "type": "json_object"
-                    }
+                    },
+                    description=(
+                        f"structuring batch {batch_number}"
+                    )
                 )
             )
-
-
-            response_text = (
-                completion
-                .choices[0]
-                .message
-                .content
-            )
-
-
-            if not response_text:
-
-                raise ValueError(
-                    "LLM returned empty content."
-                )
 
 
             parsed = parse_llm_response(
@@ -1681,25 +1651,41 @@ def semantic_structure(
 
         except Exception as error:
 
+            # A batch has failed after every retry, or the
+            # response could not be validated.
+            #
+            # Silently substituting heuristic output would
+            # report success for a document the LLM never
+            # actually structured. That is only allowed when
+            # explicitly opted into.
+
+            if not settings.STRUCTURE_ALLOW_FALLBACK:
+
+                logger.error(
+                    "LLM structuring failed on batch %d: %s",
+                    batch_number,
+                    error
+                )
+
+                raise StructuringError(
+                    f"LLM structuring failed on batch "
+                    f"{batch_number}: {error} "
+                    "Set STRUCTURE_ALLOW_FALLBACK=true to "
+                    "degrade to the deterministic classifier "
+                    "instead of failing."
+                ) from error
+
+
             fallback_batches += 1
 
 
-            print(
-                "\nWARNING:"
-            )
-
-            print(
-                "LLM structuring failed "
-                "for this batch."
-            )
-
-            print(
-                f"Reason: {error}"
-            )
-
-            print(
-                "Using Python fallback "
-                "for this batch."
+            logger.warning(
+                "LLM structuring failed on batch %d (%s). "
+                "Falling back to the deterministic "
+                "classifier for this batch "
+                "(STRUCTURE_ALLOW_FALLBACK=true).",
+                batch_number,
+                error
             )
 
 
@@ -2585,6 +2571,98 @@ def write_output_file(
     )
 
 
+def structured_blocks_to_markdown(blocks: List[Dict[str, Any]]) -> str:
+    """
+    Render structured blocks into valid Markdown.
+
+    Canonical format between structuring -> normalization -> chunking is Markdown (.md).
+    Semantic headings become Markdown headings with appropriate levels (#, ##, ...).
+    Tables and paragraphs preserve all original text tokens.
+    """
+    parts = []
+    for block in blocks:
+        b_type = block.get("type")
+        sem_type = block.get("semantic_type")
+
+        if sem_type == "heading" or b_type == "heading":
+            level = block.get("semantic_level") or block.get("python_heading_level") or 1
+            try:
+                level = max(1, min(6, int(level)))
+            except (ValueError, TypeError):
+                level = 1
+            text = block.get("text", "").strip()
+            text = re.sub(r"^#+\s*", "", text)
+            parts.append(f"{'#' * level} {text}")
+        elif b_type == "table":
+            raw_lines = block.get("raw_lines")
+            if raw_lines:
+                parts.append("\n".join(raw_lines))
+            elif "rows" in block and block["rows"]:
+                rows = block["rows"]
+                header = "| " + " | ".join(rows[0]) + " |"
+                sep = "| " + " | ".join(["---"] * len(rows[0])) + " |"
+                body = ["| " + " | ".join(r) + " |" for r in rows[1:]]
+                parts.append("\n".join([header, sep] + body))
+        else:
+            source_lines = block.get("source_lines")
+            if source_lines:
+                parts.append("\n".join(source_lines))
+            else:
+                parts.append(block.get("text", ""))
+
+    return "\n\n".join(p for p in parts if p.strip())
+
+
+def structure_markdown_file(
+    input_path: Path,
+    output_path: Path,
+    document_id: Optional[str] = None
+) -> Path:
+    """
+    Process a cleaned Markdown file through semantic structuring and write output.
+
+    Canonical format between structuring -> normalization -> chunking is Markdown (.md).
+    If output_path has a .json extension, JSON is written for inspection/debugging.
+    Otherwise, structured Markdown is written, and a sidecar .json file is also saved.
+    """
+    input_path = Path(input_path)
+    output_path = Path(output_path)
+
+    if not input_path.exists():
+        raise FileNotFoundError(f"Input file not found: {input_path}")
+
+    text = input_path.read_text(encoding="utf-8", errors="replace")
+    result = structure_document(text)
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    if output_path.suffix.lower() == ".json":
+        output_path.write_text(
+            json.dumps(result, ensure_ascii=False, indent=2),
+            encoding="utf-8"
+        )
+    else:
+        # Write canonical structured markdown
+        markdown = structured_blocks_to_markdown(result["blocks"])
+        output_path.write_text(markdown, encoding="utf-8")
+
+        # Also write sidecar JSON for inspectability
+        sidecar_path = output_path.with_suffix(".json")
+        try:
+            sidecar_path.write_text(
+                json.dumps(result, ensure_ascii=False, indent=2),
+                encoding="utf-8"
+            )
+        except Exception as e:
+            logger.debug("Failed to write sidecar JSON: %s", e)
+
+    logger.info(
+        "Structuring successful | file=%s | blocks=%d",
+        output_path.name,
+        len(result.get("blocks", []))
+    )
+    return output_path
+
+
 # ============================================================
 # ENVIRONMENT DISPLAY
 # ============================================================
@@ -2604,24 +2682,14 @@ def print_environment():
 
     print(
         f"Project root : "
-        f"{PROJECT_ROOT}"
-    )
-
-    print(
-        f".env path    : "
-        f"{ENV_PATH}"
-    )
-
-    print(
-        f".env exists  : "
-        f"{ENV_PATH.exists()}"
+        f"{BASE_DIR}"
     )
 
     print(
         "GROQ key     : "
         + (
             "FOUND"
-            if GROQ_API_KEY
+            if settings.GROQ_API_KEY
             else "NOT FOUND"
         )
     )
@@ -2633,7 +2701,7 @@ def print_environment():
 
     print(
         f"LLM enabled  : "
-        f"{LLM_ENABLED}"
+        f"{settings.LLM_ENABLED}"
     )
 
     print("=" * 70)
@@ -2713,7 +2781,7 @@ def main():
     )
 
     print(
-        f"LLM   : {LLM_ENABLED}"
+        f"LLM   : {settings.LLM_ENABLED}"
     )
 
 
@@ -2920,10 +2988,19 @@ def main():
     )
 
 
-    write_output_file(
-        result,
-        output_path
-    )
+    if Path(output_path).suffix.lower() == ".md":
+        markdown = structured_blocks_to_markdown(result["blocks"])
+        Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+        Path(output_path).write_text(markdown, encoding="utf-8")
+        try:
+            write_output_file(result, str(Path(output_path).with_suffix(".json")))
+        except Exception:
+            pass
+    else:
+        write_output_file(
+            result,
+            output_path
+        )
 
 
     print(

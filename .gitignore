@@ -15,3 +15,12 @@ venv/
 
 # Data / generated files
 data/vector_db/
+data/vector_db.*/
+data/knowledge.*/
+data/chunks/
+data/raw/uploads/
+*.backup*
+*.preflight-backup*
+
+# Temporary scratch
+scratch/

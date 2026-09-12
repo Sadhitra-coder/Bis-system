@@ -1,0 +1,148 @@
+{
+  "description": "Benchmark evaluation dataset for Phase 15 Applicability and Compliance Readiness.",
+  "version": "1.0",
+  "scenarios": [
+    {
+      "id": "APP-SCENARIO-01",
+      "description": "Electric iron directly in scope of IS 302-2-3.",
+      "product": {
+        "product_name": "Electric Dry Iron",
+        "category": "Household Appliance",
+        "intended_use": "Ironing clothes in domestic households",
+        "use_environment": "household"
+      },
+      "candidate": {
+        "standard_id": "std_is_302_2_3",
+        "standard_number": "IS 302-2-3",
+        "standard_title": "Safety of household and similar electrical appliances - Part 2-3: Particular requirements for electric irons",
+        "match_score": 0.95,
+        "temporal_status": "ACTIVE"
+      },
+      "expected_applicability_status": "APPLICABLE"
+    },
+    {
+      "id": "APP-SCENARIO-02",
+      "description": "Commercial laundry iron where standard explicitly excludes commercial laundry appliances.",
+      "product": {
+        "product_name": "Industrial Steam Press",
+        "category": "commercial laundry equipment",
+        "use_environment": "commercial"
+      },
+      "candidate": {
+        "standard_id": "std_is_302_2_3",
+        "standard_number": "IS 302-2-3",
+        "standard_title": "Safety of household and similar electrical appliances - Particular requirements for electric irons",
+        "match_score": 0.60,
+        "temporal_status": "ACTIVE"
+      },
+      "scope_text": "This standard specifies safety requirements for household electric irons. This standard does not apply to appliances intended exclusively for commercial laundry or industrial textile finishing.",
+      "expected_applicability_status": "NOT_APPLICABLE"
+    },
+    {
+      "id": "APP-SCENARIO-03",
+      "description": "General electric heating element with broad family match needing capacity verification.",
+      "product": {
+        "product_name": "Industrial Ceramic Heater Element",
+        "category": "Heating equipment",
+        "use_environment": "industrial"
+      },
+      "candidate": {
+        "standard_id": "std_is_302_2_201",
+        "standard_number": "IS 302-2-201",
+        "standard_title": "Electric immersion water heaters",
+        "match_score": 0.50,
+        "temporal_status": "ACTIVE"
+      },
+      "expected_applicability_status": "POTENTIALLY_APPLICABLE"
+    },
+    {
+      "id": "APP-SCENARIO-04",
+      "description": "Superseded standard requires verification.",
+      "product": {
+        "product_name": "PVC Insulated Cable",
+        "category": "Cables"
+      },
+      "candidate": {
+        "standard_id": "std_is_694_1990",
+        "standard_number": "IS 694 : 1990",
+        "standard_title": "PVC insulated cables for working voltages up to and including 1100 V",
+        "match_score": 0.90,
+        "temporal_status": "SUPERSEDED"
+      },
+      "expected_applicability_status": "VERIFICATION_REQUIRED"
+    },
+    {
+      "id": "APP-SCENARIO-05",
+      "description": "Missing product information leads to INSUFFICIENT_EVIDENCE.",
+      "product": null,
+      "candidate": {
+        "standard_id": "std_is_9873",
+        "standard_number": "IS 9873",
+        "standard_title": "Safety of Toys",
+        "match_score": 0.10,
+        "temporal_status": "ACTIVE"
+      },
+      "expected_applicability_status": "INSUFFICIENT_EVIDENCE"
+    },
+    {
+      "id": "APP-SCENARIO-06",
+      "description": "Full readiness check where all technical specs match and evidence is complete.",
+      "readiness_inputs": {
+        "has_applicable": true,
+        "has_tech_mismatches": false,
+        "has_missing_evidence": false,
+        "has_expired": false,
+        "has_conflicts": false
+      },
+      "expected_readiness_state": "READY_FOR_HUMAN_REVIEW"
+    },
+    {
+      "id": "APP-SCENARIO-07",
+      "description": "Readiness check where test reports are missing.",
+      "readiness_inputs": {
+        "has_applicable": true,
+        "has_tech_mismatches": false,
+        "has_missing_evidence": true,
+        "has_expired": false,
+        "has_conflicts": false
+      },
+      "expected_readiness_state": "EVIDENCE_INCOMPLETE"
+    },
+    {
+      "id": "APP-SCENARIO-08",
+      "description": "Readiness check where technical parameter mismatches exist.",
+      "readiness_inputs": {
+        "has_applicable": true,
+        "has_tech_mismatches": true,
+        "has_missing_evidence": false,
+        "has_expired": false,
+        "has_conflicts": false
+      },
+      "expected_readiness_state": "TECHNICAL_GAPS_FOUND"
+    },
+    {
+      "id": "APP-SCENARIO-09",
+      "description": "Readiness check where certificates are expired.",
+      "readiness_inputs": {
+        "has_applicable": true,
+        "has_tech_mismatches": false,
+        "has_missing_evidence": false,
+        "has_expired": true,
+        "has_conflicts": false
+      },
+      "expected_readiness_state": "DOCUMENT_GAPS_FOUND"
+    },
+    {
+      "id": "APP-SCENARIO-10",
+      "description": "Readiness check where contradictory test reports exist.",
+      "readiness_inputs": {
+        "has_applicable": true,
+        "has_tech_mismatches": false,
+        "has_missing_evidence": false,
+        "has_expired": false,
+        "has_conflicts": true
+      },
+      "expected_readiness_state": "VERIFICATION_REQUIRED"
+    }
+  ]
+}

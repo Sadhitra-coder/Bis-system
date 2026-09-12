@@ -2,37 +2,43 @@ import json
 import logging
 from pathlib import Path
 
+from typing import Any, Dict, List, Optional
+
 import chromadb
 from sentence_transformers import SentenceTransformer
+
+from app.config import (
+    CHUNKS_DATA_DIR,
+    VECTOR_DB_DIR,
+    settings,
+)
+from app.index_schema import (
+    CHUNK_INDEX_SCHEMA_VERSION,
+    build_chunk_index_metadata,
+    validate_chunk_index_metadata,
+)
 
 
 # =========================================================
 # CONFIGURATION
+#
+# Directory layout comes from app.config module constants;
+# tunable runtime values come from app.config.settings.
 # =========================================================
 
-BASE_DIR = Path(__file__).resolve().parents[2]
-
-CHUNKS_DIR = BASE_DIR / "data" / "chunks"
-
-CHROMA_DIR = BASE_DIR / "data" / "vector_db"
-
-COLLECTION_NAME = "bis_documents"
-
-EMBEDDING_MODEL = "BAAI/bge-large-en-v1.5"
-
-BATCH_SIZE = 16
+CHUNKS_DIR = CHUNKS_DATA_DIR
+CHROMA_DIR = VECTOR_DB_DIR
+COLLECTION_NAME = settings.CHROMA_COLLECTION_NAME
+EMBEDDING_MODEL = settings.EMBEDDING_MODEL
+BATCH_SIZE = settings.EMBEDDING_BATCH_SIZE
 
 
 # =========================================================
 # LOGGING
 # =========================================================
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(levelname)s | %(message)s"
-)
-
 logger = logging.getLogger(__name__)
+
 
 
 # =========================================================
@@ -111,82 +117,137 @@ def load_chunks(json_file):
 # =========================================================
 
 def prepare_chunks(chunks):
+    """
+    Serialize chunks into (ids, documents, metadatas) for the vector index.
 
+    Metadata assembly is delegated entirely to app.index_schema, which owns
+    the single canonical definition of the persisted contract. This function
+    is deliberately thin: it decides only what TEXT gets embedded, because
+    that is a retrieval decision, not a schema decision.
+
+    Before Phase 6 the ~30 metadata fields were written out by hand here,
+    which made the contract invisible to validation and versioning, and
+    encoded unknown pages and years as 0 — indistinguishable from real
+    values of 0.
+    """
     ids = []
     documents = []
     metadatas = []
 
+    use_contextual = bool(getattr(settings, "ENABLE_CONTEXTUAL_RETRIEVAL", True))
+
     for chunk in chunks:
 
-        chunk_id = chunk.get(
-            "chunk_id"
-        )
-
-        content = chunk.get(
-            "content",
-            ""
-        )
+        chunk_id = chunk.get("chunk_id")
+        content = chunk.get("content", "")
 
         if not content.strip():
-
-            logger.warning(
-                f"Skipping empty chunk: {chunk_id}"
-            )
-
+            logger.warning(f"Skipping empty chunk: {chunk_id}")
             continue
 
-        metadata = {
+        # Phase 5 Contextual Retrieval.
+        # source_content is ALWAYS the unaltered chunk text. Only the
+        # retrieval representation may carry a generated context prefix.
+        if use_contextual:
+            from app.rag.contextualizer import contextualize_chunk
+            ctx = contextualize_chunk(chunk)
+            source_content = content
+            contextualized_content = ctx.contextualized_content
+            context_method = ctx.context_generation_method
+            context_version = ctx.context_generation_version
+        else:
+            source_content = content
+            contextualized_content = content
+            context_method = "none"
+            context_version = "none"
 
-            "document_id":
-                str(
-                    chunk.get(
-                        "document_id",
-                        ""
-                    )
-                ),
-
-            "source_file":
-                str(
-                    chunk.get(
-                        "source_file",
-                        ""
-                    )
-                ),
-
-            "section":
-                str(
-                    chunk.get(
-                        "section",
-                        ""
-                    )
-                ),
-
-            "heading_context":
-                " > ".join(
-                    chunk.get(
-                        "heading_context",
-                        []
-                    )
-                )
-        }
-
-        ids.append(
-            chunk_id
+        metadata = build_chunk_index_metadata(
+            chunk,
+            source_content=source_content,
+            contextualized_content=contextualized_content,
+            context_generation_method=context_method,
+            context_generation_version=context_version,
         )
 
-        documents.append(
-            content
-        )
-
-        metadatas.append(
-            metadata
-        )
+        ids.append(chunk_id)
+        documents.append(contextualized_content if use_contextual else content)
+        metadatas.append(metadata)
 
     return (
         ids,
         documents,
         metadatas
     )
+
+
+# =========================================================
+# WRITE-PATH INTEGRITY GATE
+# =========================================================
+
+class IndexWriteRejected(ValueError):
+    """Raised when a batch cannot legally be written to the vector index."""
+
+
+def validate_write_batch(ids, documents, metadatas, *, strict: bool = True):
+    """
+    Validate a batch against the canonical index schema before it is written.
+
+    Every chunk entering the index passes through here. A malformed chunk is
+    surfaced loudly rather than silently persisted: a bad row in a vector
+    store is invisible afterwards — retrieval simply returns slightly wrong
+    provenance forever, and no test that inspects in-memory objects can see
+    it.
+
+    In strict mode the whole batch is rejected. Otherwise offending chunks
+    are dropped and the surviving batch is returned, so a bulk re-index can
+    make progress while still refusing to write garbage.
+
+    Returns (ids, documents, metadatas, rejections).
+    """
+    rejections = []
+
+    if not (len(ids) == len(documents) == len(metadatas)):
+        raise IndexWriteRejected(
+            f"batch arity mismatch: {len(ids)} ids, {len(documents)} documents, "
+            f"{len(metadatas)} metadatas"
+        )
+
+    keep_ids, keep_docs, keep_metas = [], [], []
+
+    for chunk_id, document, metadata in zip(ids, documents, metadatas):
+        problems = validate_chunk_index_metadata(metadata)
+
+        if not str(chunk_id or "").strip():
+            problems.append("chroma id is empty")
+        elif metadata.get("chunk_id") != str(chunk_id):
+            problems.append(
+                f"chroma id {chunk_id!r} != metadata chunk_id {metadata.get('chunk_id')!r}"
+            )
+        if not str(document or "").strip():
+            problems.append("embedded document text is empty")
+
+        if problems:
+            rejections.append({"chunk_id": chunk_id, "problems": problems})
+            continue
+
+        keep_ids.append(chunk_id)
+        keep_docs.append(document)
+        keep_metas.append(metadata)
+
+    if rejections:
+        for rejection in rejections:
+            logger.error(
+                "Rejected chunk %s from index write: %s",
+                rejection["chunk_id"], "; ".join(rejection["problems"]),
+            )
+        if strict:
+            raise IndexWriteRejected(
+                f"{len(rejections)} of {len(ids)} chunks violate index schema "
+                f"{CHUNK_INDEX_SCHEMA_VERSION}; refusing to write. "
+                f"First failure: {rejections[0]}"
+            )
+
+    return keep_ids, keep_docs, keep_metas, rejections
 
 
 # =========================================================
@@ -198,8 +259,20 @@ def embed_chunks(
     collection,
     ids,
     documents,
-    metadatas
+    metadatas,
+    strict_validation: bool = True,
 ):
+
+    # Integrity gate: nothing reaches Chroma without conforming to the
+    # canonical schema.
+    ids, documents, metadatas, rejections = validate_write_batch(
+        ids, documents, metadatas, strict=strict_validation
+    )
+    if rejections:
+        logger.warning(
+            "Proceeding with %d chunks after dropping %d schema-invalid chunks.",
+            len(ids), len(rejections),
+        )
 
     total_chunks = len(
         documents
@@ -256,6 +329,64 @@ def embed_chunks(
     logger.info(
         "Embedding and storage completed."
     )
+
+
+# =========================================================
+# PROCESS SINGLE CHUNK FILE
+# =========================================================
+
+def embed_chunk_file(
+    chunks_path: Path,
+    model: Optional[SentenceTransformer] = None,
+    collection: Optional[Any] = None
+) -> int:
+    """
+    Embed chunks from a single JSON file and index them into ChromaDB.
+
+    Parameters
+    ----------
+    chunks_path:
+        Path to the chunk JSON file.
+    model:
+        Preloaded SentenceTransformer model (optional).
+    collection:
+        Preloaded Chroma collection (optional).
+
+    Returns
+    -------
+    int:
+        Number of chunks embedded.
+    """
+    chunks_path = Path(chunks_path)
+    if not chunks_path.exists():
+        raise FileNotFoundError(f"Chunks file not found: {chunks_path}")
+
+    chunks = load_chunks(chunks_path)
+    ids, documents, metadatas = prepare_chunks(chunks)
+
+    if not documents:
+        logger.warning(f"No valid chunks to embed in {chunks_path.name}")
+        return 0
+
+    if model is None:
+        model = load_embedding_model()
+    if collection is None:
+        collection = get_collection()
+
+    embed_chunks(
+        model=model,
+        collection=collection,
+        ids=ids,
+        documents=documents,
+        metadatas=metadatas
+    )
+
+    logger.info(
+        "Embedded and indexed %d chunks from %s",
+        len(documents),
+        chunks_path.name
+    )
+    return len(documents)
 
 
 # =========================================================

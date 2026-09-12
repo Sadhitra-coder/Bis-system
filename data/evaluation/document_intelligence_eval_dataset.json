@@ -1,0 +1,113 @@
+{
+  "description": "Benchmark evaluation dataset for Phase 14 Document Intelligence and Requirement Matching.",
+  "version": "1.0",
+  "scenarios": [
+    {
+      "id": "DOC-SCENARIO-01",
+      "description": "Valid accredited test report matching insulation resistance requirement.",
+      "filename": "nabl_test_report_cable.pdf",
+      "document_text": "NATIONAL TESTING LABORATORY\nNABL Accredited Laboratory (ISO/IEC 17025)\nTest Report No: TR-2024-8891\nDate of Issue: 15-05-2024\nSample Description: PVC Insulated Cable\nStandard Reference: IS 694 : 2010\n\nTest Results:\nInsulation Resistance: Observed = 50 MOhm, Specified = >= 10 MOhm, Result: Pass\nConductor Resistance: Observed = 12.1 Ohm/km, Specified = <= 12.5 Ohm/km, Result: Pass",
+      "expected_doc_type": "TEST_REPORT",
+      "expected_is_expired": false,
+      "requirement": {
+        "requirement_id": "REQ-IR-01",
+        "parameter_name": "insulation_resistance",
+        "nominal_value": 10.0,
+        "operator": ">="
+      },
+      "expected_status": "SUPPORTED"
+    },
+    {
+      "id": "DOC-SCENARIO-02",
+      "description": "Valid test report where observed tensile strength is below specification (partial/mismatch).",
+      "filename": "steel_test_report.pdf",
+      "document_text": "METALLURGICAL TEST LABORATORY\nReport No: ML-2024-102\nDate of Testing: 2024-02-10\nStandard: IS 1786\n\nTensile Strength: Observed = 450 N/mm2, Specified = Min 500 N/mm2, Result: Fail",
+      "expected_doc_type": "TEST_REPORT",
+      "expected_is_expired": false,
+      "requirement": {
+        "requirement_id": "REQ-STEEL-01",
+        "parameter_name": "tensile_strength",
+        "nominal_value": 500.0,
+        "operator": ">="
+      },
+      "expected_status": "PARTIAL"
+    },
+    {
+      "id": "DOC-SCENARIO-03",
+      "description": "Expired calibration certificate past valid-through date.",
+      "filename": "pressure_gauge_calib.pdf",
+      "document_text": "PRECISION CALIBRATION SERVICES\nCalibration Certificate No: CAL-2022-991\nCalibrated On: 10-01-2022\nCalibration Due: 09-01-2023\nStandard Used for Calibration: Dead Weight Tester\nTraceability: NPL India\n\nOperating Pressure: 100 bar",
+      "expected_doc_type": "CALIBRATION_REPORT",
+      "expected_is_expired": true,
+      "requirement": {
+        "requirement_id": "REQ-CALIB-01",
+        "parameter_name": "operating_pressure",
+        "nominal_value": 100.0
+      },
+      "expected_status": "EXPIRED"
+    },
+    {
+      "id": "DOC-SCENARIO-04",
+      "description": "Adversarial filename: named 'test_report.pdf' but text is purely a User Manual.",
+      "filename": "test_report.pdf",
+      "document_text": "ELECTRIC BLENDER USER MANUAL\nOperating Instructions and Safety Guide\nThank you for purchasing our appliance. Please read these operating instructions carefully before use.\nTroubleshooting:\n1. If motor does not run, check plug connection.\n2. Cleaning and maintenance instructions follow.",
+      "expected_doc_type": "MANUAL",
+      "expected_anti_spoofing": true
+    },
+    {
+      "id": "DOC-SCENARIO-05",
+      "description": "Adversarial filename: named 'safety_cert.pdf' but text is an engineering CAD drawing.",
+      "filename": "safety_cert.pdf",
+      "document_text": "ENGINEERING DRAWING - CHASSIS ASSEMBLY\nDrawing No: DWG-7741-B\nScale: 1:10\nAll dimensions in mm\nDrawn by: R. Sharma\nChecked by: A. Verma\nProjection: Third Angle",
+      "expected_doc_type": "DRAWING",
+      "expected_anti_spoofing": true
+    },
+    {
+      "id": "DOC-SCENARIO-06",
+      "description": "Manufacturer Declaration of Conformity referencing BIS standard.",
+      "filename": "declaration_of_conformity.pdf",
+      "document_text": "MANUFACTURER DECLARATION OF CONFORMITY\nWe hereby declare under our sole responsibility that the product:\nElectric Immersion Water Heater Model H-2000\nconforms with Indian Standard IS 302-2-201\nSigned for and on behalf of Apex Appliances Ltd.\nDate: 2024-06-01",
+      "expected_doc_type": "DECLARATION",
+      "expected_is_expired": false
+    },
+    {
+      "id": "DOC-SCENARIO-07",
+      "description": "Quality Assurance Plan / Inspection record.",
+      "filename": "quality_plan_batch12.pdf",
+      "document_text": "QUALITY INSPECTION REPORT\nFactory Inspection and Quality Plan (QAP)\nBatch Inspection Report No: QC-2024-551\nPre-dispatch inspection carried out as per approved sampling plan.\nVisual Inspection: Satisfactory\nDimensional Verification: Pass",
+      "expected_doc_type": "QUALITY_RECORD",
+      "expected_is_expired": false
+    },
+    {
+      "id": "DOC-SCENARIO-08",
+      "description": "Chemical Laboratory Analysis Report.",
+      "filename": "chemical_analysis_cement.pdf",
+      "document_text": "CENTRAL CHEMICAL LABORATORY\nChemical Analysis Report No: CHEM-8831\nAnalytical report for Ordinary Portland Cement 43 Grade\nSpectroscopy and chemical composition results:\nInsoluble Residue: Observed = 1.8%, Specified = Max 4.0%, Result: Pass\nLoss on Ignition: Observed = 2.4%, Specified = Max 5.0%, Result: Pass",
+      "expected_doc_type": "LAB_REPORT",
+      "expected_is_expired": false
+    },
+    {
+      "id": "DOC-SCENARIO-09",
+      "description": "Missing requirement - requirement asked for sound level, but report only contains electrical tests.",
+      "filename": "electrical_test_report.pdf",
+      "document_text": "ELECTRICAL TESTING LABORATORY\nReport No: TR-EL-5501\nDate: 2024-04-12\n\nVoltage: 230 V\nPower: 750 W\nFrequency: 50 Hz",
+      "expected_doc_type": "TEST_REPORT",
+      "requirement": {
+        "requirement_id": "REQ-ACOUSTIC-01",
+        "parameter_name": "sound_level",
+        "nominal_value": 65.0
+      },
+      "expected_status": "MISSING"
+    },
+    {
+      "id": "DOC-SCENARIO-10",
+      "description": "Contradictory evidence: Two test reports give conflicting PASS vs FAIL on flame retardance.",
+      "requirement": {
+        "requirement_id": "REQ-FLAME-01",
+        "parameter_name": "flame_retardance",
+        "nominal_value": "PASS"
+      },
+      "expected_status": "CONFLICTING"
+    }
+  ]
+}

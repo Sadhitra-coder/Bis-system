@@ -1,0 +1,247 @@
+[
+  {
+    "id": "intent_01",
+    "query": "What is IS 302-2-3?",
+    "expected_intent": "STANDARD_LOOKUP",
+    "is_ambiguous": false,
+    "expected_entities": {"standard_number": "IS 302-2-3"}
+  },
+  {
+    "id": "intent_02",
+    "query": "Information on standard IS 10124",
+    "expected_intent": "STANDARD_LOOKUP",
+    "is_ambiguous": false,
+    "expected_entities": {"standard_number": "IS 10124"}
+  },
+  {
+    "id": "intent_03",
+    "query": "Clause 4.1 of IS 10124",
+    "expected_intent": "CLAUSE_LOOKUP",
+    "is_ambiguous": false,
+    "expected_entities": {"standard_number": "IS 10124", "clause_id": "4.1"}
+  },
+  {
+    "id": "intent_04",
+    "query": "What does clause 6.2 in IS 302-2-3 specify?",
+    "expected_intent": "CLAUSE_LOOKUP",
+    "is_ambiguous": false,
+    "expected_entities": {"standard_number": "IS 302-2-3", "clause_id": "6.2"}
+  },
+  {
+    "id": "intent_05",
+    "query": "Section 5 of IS 10124 requirements",
+    "expected_intent": "CLAUSE_LOOKUP",
+    "is_ambiguous": false,
+    "expected_entities": {"standard_number": "IS 10124", "clause_id": "5"}
+  },
+  {
+    "id": "intent_06",
+    "query": "What changes were introduced by Amendment 1 to IS 302-2-3?",
+    "expected_intent": "AMENDMENT_LOOKUP",
+    "is_ambiguous": false,
+    "expected_entities": {"standard_number": "IS 302-2-3", "amendment_number": "1"}
+  },
+  {
+    "id": "intent_07",
+    "query": "Details on AMD 2 of IS 10124",
+    "expected_intent": "AMENDMENT_LOOKUP",
+    "is_ambiguous": false,
+    "expected_entities": {"standard_number": "IS 10124", "amendment_number": "2"}
+  },
+  {
+    "id": "intent_08",
+    "query": "Text of the 2009 edition of IS 10124",
+    "expected_intent": "VERSION_LOOKUP",
+    "is_ambiguous": false,
+    "expected_entities": {"standard_number": "IS 10124", "standard_year": 2009}
+  },
+  {
+    "id": "intent_09",
+    "query": "IS 302-2-3:2007 version provisions",
+    "expected_intent": "VERSION_LOOKUP",
+    "is_ambiguous": false,
+    "expected_entities": {"standard_number": "IS 302-2-3", "standard_year": 2007}
+  },
+  {
+    "id": "intent_10",
+    "query": "Is IS 10124:2009 current or withdrawn?",
+    "expected_intent": "CURRENTNESS_QUERY",
+    "is_ambiguous": false,
+    "expected_entities": {"standard_number": "IS 10124", "standard_year": 2009}
+  },
+  {
+    "id": "intent_11",
+    "query": "What is the latest active version of IS 302-2-3?",
+    "expected_intent": "CURRENTNESS_QUERY",
+    "is_ambiguous": false,
+    "expected_entities": {"standard_number": "IS 302-2-3"}
+  },
+  {
+    "id": "intent_12",
+    "query": "Is IS 10124 currently in force in India?",
+    "expected_intent": "CURRENTNESS_QUERY",
+    "is_ambiguous": false,
+    "expected_entities": {"standard_number": "IS 10124"}
+  },
+  {
+    "id": "intent_13",
+    "query": "What are the temperature tolerance requirements for clinical thermometers?",
+    "expected_intent": "REQUIREMENT_DISCOVERY",
+    "is_ambiguous": false,
+    "expected_entities": {}
+  },
+  {
+    "id": "intent_14",
+    "query": "Drop test procedure and impact limits for electric kettles",
+    "expected_intent": "REQUIREMENT_DISCOVERY",
+    "is_ambiguous": false,
+    "expected_entities": {}
+  },
+  {
+    "id": "intent_15",
+    "query": "What are the insulation resistance limits specified for heating appliances?",
+    "expected_intent": "REQUIREMENT_DISCOVERY",
+    "is_ambiguous": false,
+    "expected_entities": {}
+  },
+  {
+    "id": "intent_16",
+    "query": "Which Indian standard applies to electric irons?",
+    "expected_intent": "STANDARD_DISCOVERY",
+    "is_ambiguous": false,
+    "expected_entities": {}
+  },
+  {
+    "id": "intent_17",
+    "query": "What standard governs solid stem clinical thermometers?",
+    "expected_intent": "STANDARD_DISCOVERY",
+    "is_ambiguous": false,
+    "expected_entities": {}
+  },
+  {
+    "id": "intent_18",
+    "query": "Which IS standard should be followed for domestic toaster manufacturing?",
+    "expected_intent": "STANDARD_DISCOVERY",
+    "is_ambiguous": false,
+    "expected_entities": {}
+  },
+  {
+    "id": "intent_19",
+    "query": "Do we need BIS certification for manufacturing clinical thermometers?",
+    "expected_intent": "APPLICABILITY_QUERY",
+    "is_ambiguous": false,
+    "has_product": true
+  },
+  {
+    "id": "intent_20",
+    "query": "Is BIS certification mandatory for my product?",
+    "expected_intent": "APPLICABILITY_QUERY",
+    "is_ambiguous": false,
+    "has_product": false
+  },
+  {
+    "id": "intent_21",
+    "query": "Does QCO apply to imported electric appliances under our business?",
+    "expected_intent": "APPLICABILITY_QUERY",
+    "is_ambiguous": false,
+    "has_product": false
+  },
+  {
+    "id": "intent_22",
+    "query": "What documents are required to apply for a BIS license?",
+    "expected_intent": "DOCUMENT_REQUIREMENT_QUERY",
+    "is_ambiguous": false,
+    "expected_entities": {}
+  },
+  {
+    "id": "intent_23",
+    "query": "Test reports and factory layout documentation needed for ISI mark application",
+    "expected_intent": "DOCUMENT_REQUIREMENT_QUERY",
+    "is_ambiguous": false,
+    "expected_entities": {}
+  },
+  {
+    "id": "intent_24",
+    "query": "What other standards are referenced by IS 302-2-3?",
+    "expected_intent": "REFERENCE_LOOKUP",
+    "is_ambiguous": false,
+    "expected_entities": {"standard_number": "IS 302-2-3"}
+  },
+  {
+    "id": "intent_25",
+    "query": "Normative references and cited standards in IS 10124",
+    "expected_intent": "REFERENCE_LOOKUP",
+    "is_ambiguous": false,
+    "expected_entities": {"standard_number": "IS 10124"}
+  },
+  {
+    "id": "intent_26",
+    "query": "Explain the safety rationale behind clause 4 in IS 302-2-3",
+    "expected_intent": "EXPLANATION_QUERY",
+    "is_ambiguous": false,
+    "expected_entities": {"standard_number": "IS 302-2-3", "clause_id": "4"}
+  },
+  {
+    "id": "intent_27",
+    "query": "Why was the calibration procedure changed in IS 10124?",
+    "expected_intent": "EXPLANATION_QUERY",
+    "is_ambiguous": false,
+    "expected_entities": {"standard_number": "IS 10124"}
+  },
+  {
+    "id": "intent_28",
+    "query": "Compare IS 10124:2009 with IS 10124:2017",
+    "expected_intent": "COMPARISON_QUERY",
+    "is_ambiguous": false,
+    "expected_entities": {"standard_number": "IS 10124"}
+  },
+  {
+    "id": "intent_29",
+    "query": "What are the differences between IS 302 Part 1 and Part 2?",
+    "expected_intent": "COMPARISON_QUERY",
+    "is_ambiguous": false,
+    "expected_entities": {"standard_number": "IS 302"}
+  },
+  {
+    "id": "intent_30",
+    "query": "What is the Bureau of Indian Standards and its functions?",
+    "expected_intent": "GENERAL_INFORMATION",
+    "is_ambiguous": false,
+    "expected_entities": {}
+  },
+  {
+    "id": "intent_31",
+    "query": "How does BIS operate in India?",
+    "expected_intent": "GENERAL_INFORMATION",
+    "is_ambiguous": false,
+    "expected_entities": {}
+  },
+  {
+    "id": "intent_32",
+    "query": "lity",
+    "expected_intent": "AMBIGUOUS_QUERY",
+    "is_ambiguous": true,
+    "expected_entities": {}
+  },
+  {
+    "id": "intent_33",
+    "query": "compliance",
+    "expected_intent": "AMBIGUOUS_QUERY",
+    "is_ambiguous": true,
+    "expected_entities": {}
+  },
+  {
+    "id": "intent_34",
+    "query": "testing",
+    "expected_intent": "AMBIGUOUS_QUERY",
+    "is_ambiguous": true,
+    "expected_entities": {}
+  },
+  {
+    "id": "intent_35",
+    "query": "standard",
+    "expected_intent": "AMBIGUOUS_QUERY",
+    "is_ambiguous": true,
+    "expected_entities": {}
+  }
+]

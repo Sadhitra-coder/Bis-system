@@ -1,12 +1,52 @@
-fastapi==0.115.0
-uvicorn==0.30.6
-pydantic==2.9.2
-sqlalchemy==2.0.35
-psycopg2-binary==2.9.9
-qdrant-client==1.12.0
-langchain==0.3.7
-langchain-community==0.3.3
-openai==1.52.2
+# ============================================================
+# BIS RAG Engine - Python dependencies
+#
+# Every package listed here is actually imported by the code.
+# Versions are pinned to the set that the pipeline is verified
+# against (Python 3.11).
+# ============================================================
+
+# ---------------- Web API ----------------
+fastapi==0.118.0
+uvicorn==0.37.0
+python-multipart==0.0.20          # required by FastAPI UploadFile (app/api/upload.py)
+
+# ---------------- Configuration / models ----------------
+pydantic==2.13.4
+pydantic-settings==2.15.0
 python-dotenv==1.0.1
-pytest==8.3.3
-httpx==0.27.2
+
+# ---------------- Ingestion (PDF -> Markdown) ----------------
+docling==2.55.1                   # app/steps/extract.py
+
+# ---------------- Embeddings / vector index ----------------
+sentence-transformers==5.1.0      # app/steps/embed.py, app/rag/retriever.py, app/rag/reranker.py
+chromadb==1.3.0                   # app/steps/embed.py, app/rag/retriever.py
+numpy==1.26.4                     # app/rag/retriever.py
+
+# NOTE on TensorFlow / Keras
+# --------------------------
+# transformers (pulled in by sentence-transformers) aborts at
+# import time if TensorFlow is importable and the installed
+# Keras is Keras 3. This project uses the PyTorch backend only,
+# so app/__init__.py sets USE_TF=0 / TRANSFORMERS_NO_TF=1 before
+# transformers is imported. No tf-keras shim is required, and
+# TensorFlow is deliberately NOT a dependency of this project.
+
+# ---------------- Lexical retrieval ----------------
+rank-bm25==0.2.2                  # app/rag/retriever.py
+
+# ---------------- LLM ----------------
+groq==0.31.0                      # app/steps/structure.py, app/rag/generator.py
+
+# ---------------- Testing ----------------
+pytest==9.1.1
+httpx==0.28.1                     # FastAPI TestClient
+
+# ============================================================
+# Removed (were listed but never imported anywhere in app/):
+#   sqlalchemy, psycopg2-binary  -> no Postgres code remains
+#   qdrant-client                -> vector store is ChromaDB
+#   langchain, langchain-community -> not used
+#   openai                       -> LLM access is via groq
+# ============================================================

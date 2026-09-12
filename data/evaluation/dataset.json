@@ -1,0 +1,251 @@
+[
+  {
+    "id": "q01_exact_std_bis_act",
+    "query": "Bureau of Indian Standards Act",
+    "category": "exact standard",
+    "expected_chunk_ids": [
+      "doc_61cc606dc4968257_5710f9dab2f0be2b",
+      "doc_90d46c947dc18a22_c02d30b1a5aaa3cd"
+    ],
+    "expected_decision": "answer",
+    "notes": "References BIS Act 2016 in Gazette order preamble."
+  },
+  {
+    "id": "q02_exact_std_absent_is3055",
+    "query": "IS 3055",
+    "category": "exact standard",
+    "expected_chunk_ids": [],
+    "expected_decision": "verification_required",
+    "notes": "IS 3055 is absent from real Gazette corpus; verifies zero false-positive hallucination."
+  },
+  {
+    "id": "q03_exact_std_absent_is1234",
+    "query": "IS 1234",
+    "category": "exact standard",
+    "expected_chunk_ids": [],
+    "expected_decision": "verification_required",
+    "notes": "Absent standard; tests unlinked handling."
+  },
+  {
+    "id": "q04_std_year_bis_act_2016",
+    "query": "Bureau of Indian Standards Act 2016",
+    "category": "standard + year",
+    "expected_chunk_ids": [
+      "doc_61cc606dc4968257_5710f9dab2f0be2b",
+      "doc_90d46c947dc18a22_c02d30b1a5aaa3cd"
+    ],
+    "expected_decision": "answer",
+    "notes": "BIS Act with publication year 2016."
+  },
+  {
+    "id": "q05_std_year_absent_is3055_2024",
+    "query": "IS 3055:2024",
+    "category": "standard + year",
+    "expected_chunk_ids": [],
+    "expected_decision": "verification_required",
+    "notes": "Absent standard year query; tests clean handling without false match."
+  },
+  {
+    "id": "q06_clause_section_14_3",
+    "query": "Section 14 sub-section (3)",
+    "category": "clause",
+    "expected_chunk_ids": [
+      "doc_61cc606dc4968257_5710f9dab2f0be2b"
+    ],
+    "expected_decision": "answer",
+    "notes": "Sub-section (3) of section 14 conferred powers in English order."
+  },
+  {
+    "id": "q07_clause_hindi_section_15",
+    "query": "धारा 15 की उपधारा (2) और उपधारा (3)",
+    "category": "clause",
+    "expected_chunk_ids": [
+      "doc_61cc606dc4968257_75aac86342c79f94",
+      "doc_90d46c947dc18a22_c02d30b1a5aaa3cd"
+    ],
+    "expected_decision": "answer",
+    "notes": "Conferred powers section in Hindi order."
+  },
+  {
+    "id": "q08_clause_absent_clause_4_1",
+    "query": "Clause 4.1",
+    "category": "clause",
+    "expected_chunk_ids": [],
+    "expected_decision": "verification_required",
+    "notes": "Clause 4.1 is absent in Gazette order."
+  },
+  {
+    "id": "q09_amendment_third_amendment_order",
+    "query": "Third Amendment Order 2026",
+    "category": "amendment",
+    "expected_chunk_ids": [
+      "doc_61cc606dc4968257_5710f9dab2f0be2b"
+    ],
+    "expected_decision": "answer",
+    "notes": "Title of English order: Third Amendment Order, 2026."
+  },
+  {
+    "id": "q10_amendment_hindi_teesra_sanshodhan",
+    "query": "तीसरा संशोधन आदेश 2026",
+    "category": "amendment",
+    "expected_chunk_ids": [
+      "doc_61cc606dc4968257_75aac86342c79f94",
+      "doc_90d46c947dc18a22_c02d30b1a5aaa3cd"
+    ],
+    "expected_decision": "answer",
+    "notes": "Title of Hindi order: तीसरा संशोधन आदेश, 2026."
+  },
+  {
+    "id": "q11_amendment_lastly_amended_so_2117",
+    "query": "lastly amended vide number S.O. 2117(E)",
+    "category": "amendment",
+    "expected_chunk_ids": [
+      "doc_61cc606dc4968257_9b65262ce4382ff3"
+    ],
+    "expected_decision": "answer",
+    "notes": "Footnote note stating last amendment S.O. 2117(E)."
+  },
+  {
+    "id": "q12_semantic_hallmarking_gold",
+    "query": "Hallmarking of Gold Jewellery and Gold Artefacts",
+    "category": "semantic requirement",
+    "expected_chunk_ids": [
+      "doc_61cc606dc4968257_5710f9dab2f0be2b"
+    ],
+    "expected_decision": "answer",
+    "notes": "Subject of the regulatory order."
+  },
+  {
+    "id": "q13_semantic_hindi_swarna_aabhushan",
+    "query": "स्वर्ण आभूषण और स्वर्ण कलाकृतियों की हॉलमार्किंग",
+    "category": "semantic requirement",
+    "expected_chunk_ids": [
+      "doc_61cc606dc4968257_75aac86342c79f94",
+      "doc_90d46c947dc18a22_c02d30b1a5aaa3cd"
+    ],
+    "expected_decision": "answer",
+    "notes": "Subject of the Hindi regulatory order."
+  },
+  {
+    "id": "q14_semantic_districts_uttar_pradesh",
+    "query": "districts covered under gold hallmarking in Uttar Pradesh",
+    "category": "semantic requirement",
+    "expected_chunk_ids": [
+      "doc_61cc606dc4968257_9b65262ce4382ff3",
+      "doc_61cc606dc4968257_9d19edfc138ac766"
+    ],
+    "expected_decision": "answer",
+    "notes": "Annexure list for Uttar Pradesh districts."
+  },
+  {
+    "id": "q15_reference_so_4345_e",
+    "query": "S.O. 4345(E)",
+    "category": "reference",
+    "expected_chunk_ids": [
+      "doc_61cc606dc4968257_5710f9dab2f0be2b"
+    ],
+    "expected_decision": "answer",
+    "notes": "Statutory Order reference number in English text."
+  },
+  {
+    "id": "q16_reference_hindi_ka_aa_4345",
+    "query": "का. आ. 4345(अ)",
+    "category": "reference",
+    "expected_chunk_ids": [
+      "doc_61cc606dc4968257_75aac86342c79f94",
+      "doc_90d46c947dc18a22_c02d30b1a5aaa3cd"
+    ],
+    "expected_decision": "answer",
+    "notes": "Statutory Order reference number in Hindi text."
+  },
+  {
+    "id": "q17_reference_file_no_bis_part2",
+    "query": "F. No. V-6/1/2017-BIS(Part-2)",
+    "category": "reference",
+    "expected_chunk_ids": [
+      "doc_61cc606dc4968257_9b65262ce4382ff3"
+    ],
+    "expected_decision": "answer",
+    "notes": "Ministry file number at end of order."
+  },
+  {
+    "id": "q18_reference_so_205_e_principal_order",
+    "query": "S.O. 205 (E) dated 15th January 2020",
+    "category": "reference",
+    "expected_chunk_ids": [
+      "doc_61cc606dc4968257_9b65262ce4382ff3"
+    ],
+    "expected_decision": "answer",
+    "notes": "Principal order reference in footnote."
+  },
+  {
+    "id": "q19_hindi_pure_ministry_name",
+    "query": "उपभोक्ता मामले, खाद्य और सार्वजनिक वितरण मंत्रालय",
+    "category": "Hindi/English",
+    "expected_chunk_ids": [
+      "doc_61cc606dc4968257_a39df30502b05544",
+      "doc_90d46c947dc18a22_860db93bd0f48d25"
+    ],
+    "expected_decision": "answer",
+    "notes": "Pure Hindi ministry name header."
+  },
+  {
+    "id": "q20_english_pure_ministry_name",
+    "query": "MINISTRY OF CONSUMER AFFAIRS, FOOD AND PUBLIC DISTRIBUTION",
+    "category": "Hindi/English",
+    "expected_chunk_ids": [
+      "doc_61cc606dc4968257_5710f9dab2f0be2b"
+    ],
+    "expected_decision": "answer",
+    "notes": "Pure English ministry name header."
+  },
+  {
+    "id": "q21_english_gautam_buddha_nagar",
+    "query": "Gautam Buddha Nagar district",
+    "category": "Hindi/English",
+    "expected_chunk_ids": [
+      "doc_61cc606dc4968257_9b65262ce4382ff3"
+    ],
+    "expected_decision": "answer",
+    "notes": "English district name in Annexure."
+  },
+  {
+    "id": "q22_mixed_extraordinary_part_ii",
+    "query": "असाधारण EXTRAORDINARY PART II-Section 3",
+    "category": "mixed language",
+    "expected_chunk_ids": [
+      "doc_61cc606dc4968257_69c51d967d87d45a",
+      "doc_90d46c947dc18a22_98f159a4694bd970"
+    ],
+    "expected_decision": "answer",
+    "notes": "Mixed bilingual masthead banner."
+  },
+  {
+    "id": "q23_mixed_cg_dl_gazette_id",
+    "query": "CG-DL-E-06082026-275240 असाधारण",
+    "category": "mixed language",
+    "expected_chunk_ids": [
+      "doc_61cc606dc4968257_beeb268d49ab107c",
+      "doc_61cc606dc4968257_69c51d967d87d45a",
+      "doc_90d46c947dc18a22_3f7fb20b47b48b97"
+    ],
+    "expected_decision": "answer",
+    "notes": "Gazette registration code + Hindi keyword."
+  },
+  {
+    "id": "q24_distractor_so_9999",
+    "query": "S.O. 9999(E)",
+    "category": "distractor numeric queries",
+    "expected_chunk_ids": [],
+    "expected_decision": "verification_required",
+    "notes": "Distractor numeric query not present in document; tests precision."
+  },
+  {
+    "id": "q25_distractor_act_777_of_2099",
+    "query": "777 of 2099",
+    "category": "distractor numeric queries",
+    "expected_chunk_ids": [],
+    "expected_decision": "verification_required",
+    "notes": "Distractor Act number not present in document."
+  }
+]

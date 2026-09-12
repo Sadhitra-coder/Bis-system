@@ -1,0 +1,102 @@
+[
+  {
+    "scenario_id": "tech_spec_01_water_storage_capacity",
+    "product_name": "Domestic Water Storage Tank",
+    "specification_text": "capacity: 500 L; material: Polyethylene; diameter: 800 mm",
+    "standard_number": "IS 12701",
+    "clause_requirement": "Nominal storage capacity shall not be less than 500 L.",
+    "expected_parameter": "capacity",
+    "expected_state": "MATCH",
+    "notes": "Exact threshold match for GE operator."
+  },
+  {
+    "scenario_id": "tech_spec_02_temperature_over_limit",
+    "product_name": "Immersion Water Heater",
+    "specification_text": "operating temperature: 55 °C; voltage: 230 V",
+    "standard_number": "IS 302-2-201",
+    "clause_requirement": "Maximum operating temperature shall not exceed 40 °C.",
+    "expected_parameter": "operating temperature",
+    "expected_state": "MISMATCH",
+    "notes": "Specification exceeds maximum permitted threshold."
+  },
+  {
+    "scenario_id": "tech_spec_03_dimension_with_tolerance",
+    "product_name": "Steel Structural Bar",
+    "specification_text": "thickness: 10 ± 0.5 mm; material: Carbon Steel",
+    "standard_number": "IS 2062",
+    "clause_requirement": "Nominal thickness shall be 10 ± 0.5 mm.",
+    "expected_parameter": "thickness",
+    "expected_state": "MATCH",
+    "notes": "Both nominal and tolerance windows match cited requirement."
+  },
+  {
+    "scenario_id": "tech_spec_04_tolerance_exceeds_threshold",
+    "product_name": "Pressure Vessel Valve",
+    "specification_text": "opening pressure: 10 ± 2.0 bar",
+    "standard_number": "IS 2825",
+    "clause_requirement": "Maximum allowable pressure shall not exceed 11 bar.",
+    "expected_parameter": "opening pressure",
+    "expected_state": "PARTIAL_MATCH",
+    "notes": "Nominal (10 bar) is <= 11 bar, but upper tolerance (12 bar) exceeds limit."
+  },
+  {
+    "scenario_id": "tech_spec_05_unit_conversion_volume",
+    "product_name": "Chemical Laboratory Flask",
+    "specification_text": "volume: 5000 ml; material: Borosilicate Glass",
+    "standard_number": "IS 1381",
+    "clause_requirement": "Capacity shall be at least 5 L.",
+    "expected_parameter": "volume",
+    "expected_state": "MATCH",
+    "notes": "5000 ml correctly converts to 5 L."
+  },
+  {
+    "scenario_id": "tech_spec_06_incompatible_units",
+    "product_name": "Pneumatic Hose",
+    "specification_text": "pressure rating: 200 mm; length: 15 m",
+    "standard_number": "IS 447",
+    "clause_requirement": "Working pressure shall be at least 10 bar.",
+    "expected_parameter": "pressure rating",
+    "expected_state": "UNVERIFIABLE",
+    "notes": "Length unit 'mm' is physically incompatible with pressure 'bar'."
+  },
+  {
+    "scenario_id": "tech_spec_07_qualitative_value",
+    "product_name": "Thermal Insulation Blanket",
+    "specification_text": "heat resistance: high; thickness: 50 mm",
+    "standard_number": "IS 8183",
+    "clause_requirement": "Thermal conductivity shall not exceed 0.04 W/mK.",
+    "expected_parameter": "heat resistance",
+    "expected_state": "UNVERIFIABLE",
+    "notes": "Qualitative non-numeric term 'high' cannot be compared mathematically."
+  },
+  {
+    "scenario_id": "tech_spec_08_missing_parameter",
+    "product_name": "Electric Motor",
+    "specification_text": "voltage: 415 V; frequency: 50 Hz",
+    "standard_number": "IS 12615",
+    "clause_requirement": "Efficiency shall not be less than 85 %.",
+    "expected_parameter": "efficiency",
+    "expected_state": "MISSING",
+    "notes": "Efficiency is required by standard but unstated in specification."
+  },
+  {
+    "scenario_id": "tech_spec_09_range_inside",
+    "product_name": "Clinical Thermometer",
+    "specification_text": "measurement range: between 35.5 and 42.0 °C",
+    "standard_number": "IS 3055",
+    "clause_requirement": "Temperature scale shall be between 35.0 and 43.0 °C.",
+    "expected_parameter": "measurement range",
+    "expected_state": "MATCH",
+    "notes": "Specification range is entirely within required scale."
+  },
+  {
+    "scenario_id": "tech_spec_10_range_outside",
+    "product_name": "Ambient Temperature Sensor",
+    "specification_text": "calibrated range: between -20.0 and 10.0 °C",
+    "standard_number": "IS 16074",
+    "clause_requirement": "Ambient operating range shall be between 20.0 and 50.0 °C.",
+    "expected_parameter": "calibrated range",
+    "expected_state": "MISMATCH",
+    "notes": "Specification range falls outside standard requirement."
+  }
+]
