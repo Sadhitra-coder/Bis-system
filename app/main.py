@@ -1,7 +1,8 @@
 import logging
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Request, Response
+from fastapi import Depends, FastAPI, Request, Response
 
+from app.auth import CorrelationIdMiddleware, verify_internal_service_key
 from app.config import ensure_directories, settings
 from app.api import upload, query, status, jobs
 from app.index_integrity import (
@@ -117,9 +118,11 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# Mount API routers
-app.include_router(upload.router)
-app.include_router(query.router)
+app.add_middleware(CorrelationIdMiddleware)
+
+# Mount API routers (protect upload and query with internal service key)
+app.include_router(upload.router, dependencies=[Depends(verify_internal_service_key)])
+app.include_router(query.router, dependencies=[Depends(verify_internal_service_key)])
 app.include_router(status.router)
 app.include_router(jobs.router)
 

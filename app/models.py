@@ -353,6 +353,7 @@ class QueryRequest(BaseModel):
     Request sent to the RAG system.
     """
     query: str
+    correlation_id: Optional[str] = None
     document_ids: Optional[List[str]] = None
     top_k: Optional[int] = None
     # Phase 10 Business & Profile Context fields
@@ -371,6 +372,7 @@ class QueryResponse(BaseModel):
     Final answer returned by the RAG system.
     """
     query_id: Optional[str] = None
+    correlation_id: Optional[str] = None
     query: str
     answer: str
     sources: List[Dict[str, Any]]

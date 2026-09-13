@@ -70,6 +70,9 @@ class Settings(BaseSettings):
     APP_ENV: str = "development"
     LOG_LEVEL: str = "INFO"
 
+    # ---------------- Service-to-Service Security ----------------
+    INTERNAL_SERVICE_KEY: Optional[str] = "complywise-internal-bis-key-default"
+
     # ---------------- Groq / LLM ----------------
     # Structuring (ingestion) and answer generation (RAG) both
     # use Groq. They may run on different models.

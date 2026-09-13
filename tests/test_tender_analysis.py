@@ -233,7 +233,7 @@ def test_adversarial_rejection_of_legal_conclusions():
 # ============================================================
 
 def test_tender_gap_eval_dataset_15_scenarios():
-    eval_path = Path("E:/Bis-system/data/evaluation/tender_gap_eval_dataset.json")
+    eval_path = Path(__file__).resolve().parent.parent / "data" / "evaluation" / "tender_gap_eval_dataset.json"
     assert eval_path.exists(), "Tender evaluation dataset must exist"
 
     with open(eval_path, "r", encoding="utf-8") as f:

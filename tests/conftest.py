@@ -25,3 +25,14 @@ def fresh_ingestion_slots(monkeypatch):
         "_INGESTION_SLOTS",
         threading.BoundedSemaphore(settings.MAX_CONCURRENT_INGESTIONS),
     )
+
+
+@pytest.fixture(autouse=True)
+def configure_test_settings(monkeypatch):
+    """Set test environment and fallback defaults for test session."""
+    from app.config import settings
+
+    monkeypatch.setattr(settings, "APP_ENV", "test")
+    if not settings.GROQ_API_KEY:
+        monkeypatch.setattr(settings, "LLM_ENABLED", False)
+

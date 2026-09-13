@@ -841,7 +841,11 @@ class RAGPipeline:
                     grounding = repaired_grounding
                 else:
                     logger.warning("Repaired generation still contains unsupported claims. Enforcing verification_required.")
-                    answer = repaired_answer
+                    answer = (
+                        f"Verification Required: The generated response contains ungrounded claims that could not be verified "
+                        f"against authoritative BIS standard text ({repaired_grounding.reason or 'evidence mismatch'}). "
+                        f"Manual regulatory verification is required."
+                    )
                     grounding = repaired_grounding
         else:
             if query_context.intent.intent == QueryIntentType.APPLICABILITY_QUERY:
