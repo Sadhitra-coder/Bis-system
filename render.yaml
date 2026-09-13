@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: bis-system-v5
+    env: python
+    plan: free
+    region: oregon
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: INTERNAL_SERVICE_KEY
+        generateValue: true
+      - key: LLM_ENABLED
+        value: "false"
