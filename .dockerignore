@@ -1,0 +1,33 @@
+# Version control
+.git
+.github
+
+# Python caches and environments
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+
+# Environment files and credentials
+.env
+.env.*
+!.env.example
+
+# IDE and temporary files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+scratch/
+
+# Test artifacts and reports
+tests/
+docs/
+*.md
+
+# Keep data/knowledge and data/vector_db explicitly
+!data/knowledge/bis_knowledge.db
+!data/vector_db/**
