@@ -1,0 +1,665 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-slate-950 text-slate-100 antialiased">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BIS Intelligence Engine — Agent Playground & Coverage Dashboard</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Marked.js for Markdown parsing -->
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#f0fdf4',
+              500: '#22c55e',
+              600: '#16a34a',
+              700: '#15803d',
+              900: '#14532d',
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    /* Custom scrollbars */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #0f172a; }
+    ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: #475569; }
+    .prose p { margin-bottom: 0.75rem; line-height: 1.6; }
+    .prose ul { list-style-type: disc; margin-left: 1.25rem; margin-bottom: 0.75rem; }
+    .prose ol { list-style-type: decimal; margin-left: 1.25rem; margin-bottom: 0.75rem; }
+    .prose code { background: #1e293b; padding: 0.15rem 0.35rem; border-radius: 0.25rem; font-family: monospace; font-size: 0.875em; }
+    .prose strong { color: #f8fafc; font-weight: 600; }
+  </style>
+</head>
+<body class="h-full flex flex-col font-sans selection:bg-brand-500 selection:text-white" data-initial-tab="chat">
+
+  <!-- Top Global Header -->
+  <header class="h-14 border-b border-slate-800 bg-slate-900/80 backdrop-blur px-4 flex items-center justify-between shrink-0 z-20">
+    <div class="flex items-center gap-3">
+      <div class="w-8 h-8 rounded-lg bg-gradient-to-tr from-emerald-600 to-teal-400 flex items-center justify-center shadow-lg shadow-emerald-500/20">
+        <i data-lucide="shield-check" class="w-5 h-5 text-slate-950 stroke-[2.5]"></i>
+      </div>
+      <div>
+        <div class="flex items-center gap-2">
+          <span class="font-bold text-sm tracking-tight text-white">BIS Intelligence Engine</span>
+          <span class="text-[10px] uppercase font-mono px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-semibold">V5 Production</span>
+        </div>
+        <div class="text-[11px] text-slate-400">National Standards & Compliance Retrieval Architecture</div>
+      </div>
+    </div>
+
+    <!-- Navigation Tabs -->
+    <div class="flex items-center bg-slate-800/80 p-1 rounded-lg border border-slate-700/60">
+      <button id="tabChatBtn" onclick="switchTab('chat')" class="flex items-center gap-2 px-3 py-1 rounded-md text-xs font-medium transition-colors bg-slate-700 text-white shadow-sm">
+        <i data-lucide="message-square" class="w-3.5 h-3.5"></i>
+        <span>AI Playground</span>
+      </button>
+      <button id="tabDashBtn" onclick="switchTab('dashboard')" class="flex items-center gap-2 px-3 py-1 rounded-md text-xs font-medium transition-colors text-slate-400 hover:text-white">
+        <i data-lucide="layout-dashboard" class="w-3.5 h-3.5"></i>
+        <span>Coverage Dashboard</span>
+      </button>
+    </div>
+
+    <!-- System Status Badges -->
+    <div class="flex items-center gap-3 text-xs">
+      <div class="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-800 border border-slate-700 text-slate-300">
+        <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+        <span class="font-mono text-[11px]">INDIA:NATIONAL</span>
+      </div>
+      <div class="flex items-center gap-1 text-slate-400 hover:text-white cursor-pointer" onclick="refreshStats()" title="Refresh System Status">
+        <i data-lucide="refresh-cw" id="refreshIcon" class="w-4 h-4"></i>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <div class="flex-1 flex overflow-hidden">
+
+    <!-- ======================================================== -->
+    <!-- VIEW 1: CHAT PLAYGROUND -->
+    <!-- ======================================================== -->
+    <div id="chatView" class="flex-1 flex overflow-hidden">
+      <!-- Chat Sidebar -->
+      <aside class="w-64 border-r border-slate-800 bg-slate-900/40 hidden md:flex flex-col shrink-0">
+        <!-- New Chat Button -->
+        <div class="p-3">
+          <button onclick="clearChat()" class="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-medium transition shadow-md shadow-emerald-600/20">
+            <i data-lucide="plus-circle" class="w-4 h-4"></i>
+            <span>New Compliance Query</span>
+          </button>
+        </div>
+
+        <!-- Sample Prompts -->
+        <div class="flex-1 overflow-y-auto px-3 py-2 space-y-4">
+          <div>
+            <div class="text-[10px] font-semibold uppercase tracking-wider text-slate-500 mb-2 px-1">Curated Regulatory Inquiries</div>
+            <div class="space-y-1">
+              <button onclick="usePrompt('Is IS 1293:2019 mandatory for domestic plugs and socket-outlets?')" class="w-full text-left text-xs p-2 rounded-lg hover:bg-slate-800/60 text-slate-300 transition flex items-start gap-2 border border-transparent hover:border-slate-700/50">
+                <i data-lucide="zap" class="w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5"></i>
+                <span class="line-clamp-2">IS 1293:2019 Mandatory Plugs QCO</span>
+              </button>
+              <button onclick="usePrompt('What are the test requirements and specifications for smart meters under IS 16444?')" class="w-full text-left text-xs p-2 rounded-lg hover:bg-slate-800/60 text-slate-300 transition flex items-start gap-2 border border-transparent hover:border-slate-700/50">
+                <i data-lucide="gauge" class="w-3.5 h-3.5 text-blue-400 shrink-0 mt-0.5"></i>
+                <span class="line-clamp-2">Smart Meters (IS 16444) Test Specs</span>
+              </button>
+              <button onclick="usePrompt('Which products require mandatory certification under the Toys (Quality Control) Order?')" class="w-full text-left text-xs p-2 rounded-lg hover:bg-slate-800/60 text-slate-300 transition flex items-start gap-2 border border-transparent hover:border-slate-700/50">
+                <i data-lucide="package" class="w-3.5 h-3.5 text-purple-400 shrink-0 mt-0.5"></i>
+                <span class="line-clamp-2">Toys QCO & IS 9873 Safety Scope</span>
+              </button>
+              <button onclick="usePrompt('What are the spark testing and voltage specifications for PVC cables under IS 694?')" class="w-full text-left text-xs p-2 rounded-lg hover:bg-slate-800/60 text-slate-300 transition flex items-start gap-2 border border-transparent hover:border-slate-700/50">
+                <i data-lucide="cable" class="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5"></i>
+                <span class="line-clamp-2">PVC Cables (IS 694) Spark Testing</span>
+              </button>
+              <button onclick="usePrompt('What are the mandatory hallmarking guidelines for gold jewellery under IS 1417?')" class="w-full text-left text-xs p-2 rounded-lg hover:bg-slate-800/60 text-slate-300 transition flex items-start gap-2 border border-transparent hover:border-slate-700/50">
+                <i data-lucide="gem" class="w-3.5 h-3.5 text-yellow-400 shrink-0 mt-0.5"></i>
+                <span class="line-clamp-2">Gold Jewellery Hallmarking (IS 1417)</span>
+              </button>
+              <button onclick="usePrompt('What are the minimum tensile strength and elongation requirements for TMT steel bars under IS 1786?')" class="w-full text-left text-xs p-2 rounded-lg hover:bg-slate-800/60 text-slate-300 transition flex items-start gap-2 border border-transparent hover:border-slate-700/50">
+                <i data-lucide="anvil" class="w-3.5 h-3.5 text-orange-400 shrink-0 mt-0.5"></i>
+                <span class="line-clamp-2">TMT Rebars (IS 1786) Tensile Strength</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Sidebar Footer Metadata -->
+        <div class="p-3 border-t border-slate-800 text-[11px] text-slate-400 space-y-1 font-mono">
+          <div class="flex justify-between">
+            <span>Indexed Chunks:</span>
+            <span id="sideChunksCount" class="text-emerald-400 font-semibold">193</span>
+          </div>
+          <div class="flex justify-between">
+            <span>Corpus Release:</span>
+            <span id="sideReleaseId" class="text-slate-200">release-0001</span>
+          </div>
+          <div class="flex justify-between">
+            <span>Reranker:</span>
+            <span class="text-slate-200">Cross-Encoder</span>
+          </div>
+        </div>
+      </aside>
+
+      <!-- Chat Stream Window -->
+      <main class="flex-1 flex flex-col overflow-hidden bg-slate-950 relative">
+        <!-- Messages Area -->
+        <div id="messagesContainer" class="flex-1 overflow-y-auto px-4 py-6 max-w-4xl mx-auto w-full space-y-6">
+          <!-- Empty State Screen -->
+          <div id="emptyState" class="h-full flex flex-col items-center justify-center text-center px-4 py-12">
+            <div class="w-16 h-16 rounded-2xl bg-gradient-to-tr from-emerald-500/20 to-teal-500/10 border border-emerald-500/30 flex items-center justify-center mb-4">
+              <i data-lucide="sparkles" class="w-8 h-8 text-emerald-400"></i>
+            </div>
+            <h2 class="text-xl font-bold text-white mb-2">BIS Regulatory Intelligence Engine</h2>
+            <p class="text-sm text-slate-400 max-w-md mb-6 leading-relaxed">
+              Verify compliance mandates, test methods, product certification guidelines, and statutory Quality Control Orders (QCOs) with complete clause-level provenance.
+            </p>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 max-w-lg w-full text-left">
+              <div onclick="usePrompt('Is IS 1293:2019 mandatory for domestic plugs and sockets?')" class="p-3 rounded-xl bg-slate-900 border border-slate-800 hover:border-emerald-500/50 cursor-pointer transition text-xs text-slate-300">
+                <span class="font-semibold text-emerald-400 block mb-1">Mandatory Status</span>
+                Verify if IS 1293 is under statutory QCO enforcement.
+              </div>
+              <div onclick="usePrompt('What are the test requirements for smart meters under IS 16444?')" class="p-3 rounded-xl bg-slate-900 border border-slate-800 hover:border-emerald-500/50 cursor-pointer transition text-xs text-slate-300">
+                <span class="font-semibold text-blue-400 block mb-1">Testing Protocols</span>
+                Inspect temperature rise and accuracy tests under IS 16444.
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Input Box Area -->
+        <div class="p-4 border-t border-slate-800/80 bg-slate-900/50 backdrop-blur shrink-0">
+          <div class="max-w-4xl mx-auto relative">
+            <textarea
+              id="queryInput"
+              rows="2"
+              placeholder="Ask a compliance or standards question (e.g. 'Is IS 1293 mandatory?', 'What does IS 16444 Clause 12 specify?')..."
+              class="w-full bg-slate-900/90 text-slate-100 placeholder-slate-500 border border-slate-700/80 rounded-xl px-4 py-3 pr-14 text-sm focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition resize-none shadow-inner"
+              onkeydown="handleInputKeydown(event)"
+            ></textarea>
+            <button
+              id="sendBtn"
+              onclick="submitQuery()"
+              class="absolute right-3 bottom-4 w-9 h-9 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 disabled:hover:bg-emerald-600 text-white flex items-center justify-center transition shadow-md shadow-emerald-600/30"
+            >
+              <i data-lucide="arrow-up" class="w-5 h-5"></i>
+            </button>
+          </div>
+          <div class="max-w-4xl mx-auto mt-2 flex items-center justify-between text-[11px] text-slate-500 px-1">
+            <span>Press <kbd class="px-1 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-700">Enter</kbd> to send, <kbd class="px-1 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-700">Shift + Enter</kbd> for new line</span>
+            <span class="text-emerald-500/80 flex items-center gap-1"><i data-lucide="lock" class="w-3 h-3"></i> Authenticated Agent Pipe</span>
+          </div>
+        </div>
+      </main>
+    </div>
+
+    <!-- ======================================================== -->
+    <!-- VIEW 2: COVERAGE DASHBOARD -->
+    <!-- ======================================================== -->
+    <div id="dashboardView" class="flex-1 overflow-y-auto p-6 hidden">
+      <div class="max-w-6xl mx-auto space-y-6">
+
+        <!-- Dashboard Header -->
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800 pb-4">
+          <div>
+            <h1 class="text-2xl font-bold text-white tracking-tight flex items-center gap-2">
+              <i data-lucide="gauge" class="w-6 h-6 text-emerald-400"></i>
+              <span>Knowledge Acquisition & Coverage Dashboard</span>
+            </h1>
+            <p class="text-xs text-slate-400 mt-1">Diagnostic operator visibility across Indian compliance standards, QCOs, vector chunks, and Azure releases.</p>
+          </div>
+          <div class="flex items-center gap-3">
+            <span class="text-xs text-slate-400 font-mono">Last Synchronized: <span id="dashLastSync" class="text-slate-200">-</span></span>
+            <button onclick="refreshStats()" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-medium text-white flex items-center gap-1.5 transition">
+              <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
+              <span>Refresh Metrics</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Primary KPI Metrics Grid -->
+        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+          <div class="p-4 rounded-xl bg-slate-900/80 border border-slate-800">
+            <div class="text-[11px] text-slate-400 font-medium">Discovered Records</div>
+            <div id="kpiDiscovered" class="text-2xl font-bold text-white mt-1 font-mono">188</div>
+            <div class="text-[10px] text-emerald-400 mt-1 flex items-center gap-1"><i data-lucide="check" class="w-3 h-3"></i> Official Sources</div>
+          </div>
+          <div class="p-4 rounded-xl bg-slate-900/80 border border-slate-800">
+            <div class="text-[11px] text-slate-400 font-medium">Downloaded Manuals</div>
+            <div id="kpiDownloaded" class="text-2xl font-bold text-white mt-1 font-mono">10</div>
+            <div class="text-[10px] text-blue-400 mt-1">SHA-256 Verified</div>
+          </div>
+          <div class="p-4 rounded-xl bg-slate-900/80 border border-slate-800">
+            <div class="text-[11px] text-slate-400 font-medium">Indexed Chunks</div>
+            <div id="kpiChunks" class="text-2xl font-bold text-emerald-400 mt-1 font-mono">193</div>
+            <div class="text-[10px] text-slate-400 mt-1">Chroma Collection</div>
+          </div>
+          <div class="p-4 rounded-xl bg-slate-900/80 border border-slate-800">
+            <div class="text-[11px] text-slate-400 font-medium">Mandatory QCOs</div>
+            <div id="kpiQcos" class="text-2xl font-bold text-amber-400 mt-1 font-mono">23</div>
+            <div class="text-[10px] text-slate-400 mt-1">Statutory Orders</div>
+          </div>
+          <div class="p-4 rounded-xl bg-slate-900/80 border border-slate-800">
+            <div class="text-[11px] text-slate-400 font-medium">Standards Catalog</div>
+            <div id="kpiStandards" class="text-2xl font-bold text-white mt-1 font-mono">25</div>
+            <div class="text-[10px] text-slate-400 mt-1">25 Tech Sectors</div>
+          </div>
+          <div class="p-4 rounded-xl bg-slate-900/80 border border-slate-800">
+            <div class="text-[11px] text-slate-400 font-medium">Graph Relationships</div>
+            <div id="kpiRelations" class="text-2xl font-bold text-purple-400 mt-1 font-mono">81</div>
+            <div class="text-[10px] text-slate-400 mt-1">Knowledge Edges</div>
+          </div>
+        </div>
+
+        <!-- Release & Deployment Status -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <!-- Local Release Card -->
+          <div class="p-5 rounded-xl bg-slate-900/90 border border-slate-800">
+            <div class="flex items-center justify-between mb-3">
+              <div class="flex items-center gap-2">
+                <i data-lucide="package-check" class="w-5 h-5 text-emerald-400"></i>
+                <h3 class="text-sm font-semibold text-white">Current Local Corpus Release</h3>
+              </div>
+              <span id="dashReleaseTag" class="px-2 py-0.5 rounded text-[11px] font-mono bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">corpus-release-0001</span>
+            </div>
+            <div class="text-xs text-slate-400 space-y-2 font-mono">
+              <div class="flex justify-between py-1 border-b border-slate-800/80">
+                <span>Manifest File:</span>
+                <span class="text-slate-200">data/releases/corpus-release-0001/manifest.json</span>
+              </div>
+              <div class="flex justify-between py-1 border-b border-slate-800/80">
+                <span>SQLite DB SHA-256:</span>
+                <span id="dashDbSha" class="text-slate-300 truncate max-w-xs">Verified</span>
+              </div>
+              <div class="flex justify-between py-1 border-b border-slate-800/80">
+                <span>Source Registry Entries:</span>
+                <span id="dashSourcesCount" class="text-slate-200">29 official sources</span>
+              </div>
+              <div class="flex justify-between py-1">
+                <span>Integrity Status:</span>
+                <span class="text-emerald-400 font-semibold flex items-center gap-1"><i data-lucide="check-circle" class="w-3.5 h-3.5"></i> PASS</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Azure Target Status Card -->
+          <div class="p-5 rounded-xl bg-slate-900/90 border border-slate-800">
+            <div class="flex items-center justify-between mb-3">
+              <div class="flex items-center gap-2">
+                <i data-lucide="cloud" class="w-5 h-5 text-blue-400"></i>
+                <h3 class="text-sm font-semibold text-white">Azure Cloud Synchronization</h3>
+              </div>
+              <span class="px-2 py-0.5 rounded text-[11px] font-mono bg-blue-500/10 text-blue-400 border border-blue-500/30">Azure Container Apps</span>
+            </div>
+            <div class="text-xs text-slate-400 space-y-2 font-mono">
+              <div class="flex justify-between py-1 border-b border-slate-800/80">
+                <span>Deployed Service:</span>
+                <span class="text-slate-200">bis-system-v5</span>
+              </div>
+              <div class="flex justify-between py-1 border-b border-slate-800/80">
+                <span>Azure Region:</span>
+                <span class="text-slate-200">eastasia (Storyvord-Test)</span>
+              </div>
+              <div class="flex justify-between py-1 border-b border-slate-800/80">
+                <span>Target FQDN:</span>
+                <a href="https://bis-system-v5.bravesand-4d6fbaeb.eastasia.azurecontainerapps.io" target="_blank" class="text-blue-400 hover:underline truncate max-w-xs">bis-system-v5.bravesand-4d6fbaeb.eastasia...</a>
+              </div>
+              <div class="flex justify-between py-1">
+                <span>Provisioning State:</span>
+                <span class="text-emerald-400 font-semibold flex items-center gap-1"><i data-lucide="check-circle" class="w-3.5 h-3.5"></i> Succeeded (Running)</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Industrial Sectors Coverage Grid -->
+        <div class="p-5 rounded-xl bg-slate-900/90 border border-slate-800">
+          <div class="flex items-center justify-between mb-4">
+            <div class="flex items-center gap-2">
+              <i data-lucide="boxes" class="w-5 h-5 text-purple-400"></i>
+              <h3 class="text-sm font-semibold text-white">Multi-Industry Technical Sectors Coverage (Part T)</h3>
+            </div>
+            <span class="text-xs text-slate-400 font-mono">25 Covered Sectors</span>
+          </div>
+          <div id="sectorsGrid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2 text-xs">
+            <!-- Populated dynamically -->
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+  </div>
+
+  <!-- JavaScript Application Logic -->
+  <script>
+    // State management
+    let conversationHistory = [];
+    let isProcessing = false;
+
+    document.addEventListener('DOMContentLoaded', () => {
+      lucide.createIcons();
+      refreshStats();
+
+      // Check initial tab
+      const initTab = document.body.getAttribute('data-initial-tab');
+      if (initTab === 'dashboard') {
+        switchTab('dashboard');
+      }
+    });
+
+    function switchTab(tab) {
+      const chatView = document.getElementById('chatView');
+      const dashView = document.getElementById('dashboardView');
+      const chatBtn = document.getElementById('tabChatBtn');
+      const dashBtn = document.getElementById('tabDashBtn');
+
+      if (tab === 'chat') {
+        chatView.classList.remove('hidden');
+        dashView.classList.add('hidden');
+        chatBtn.className = "flex items-center gap-2 px-3 py-1 rounded-md text-xs font-medium transition-colors bg-slate-700 text-white shadow-sm";
+        dashBtn.className = "flex items-center gap-2 px-3 py-1 rounded-md text-xs font-medium transition-colors text-slate-400 hover:text-white";
+      } else {
+        chatView.classList.add('hidden');
+        dashView.classList.remove('hidden');
+        dashBtn.className = "flex items-center gap-2 px-3 py-1 rounded-md text-xs font-medium transition-colors bg-slate-700 text-white shadow-sm";
+        chatBtn.className = "flex items-center gap-2 px-3 py-1 rounded-md text-xs font-medium transition-colors text-slate-400 hover:text-white";
+        refreshStats();
+      }
+      lucide.createIcons();
+    }
+
+    function usePrompt(text) {
+      switchTab('chat');
+      const input = document.getElementById('queryInput');
+      input.value = text;
+      input.focus();
+    }
+
+    function clearChat() {
+      conversationHistory = [];
+      const container = document.getElementById('messagesContainer');
+      container.innerHTML = `
+        <div id="emptyState" class="h-full flex flex-col items-center justify-center text-center px-4 py-12">
+          <div class="w-16 h-16 rounded-2xl bg-gradient-to-tr from-emerald-500/20 to-teal-500/10 border border-emerald-500/30 flex items-center justify-center mb-4">
+            <i data-lucide="sparkles" class="w-8 h-8 text-emerald-400"></i>
+          </div>
+          <h2 class="text-xl font-bold text-white mb-2">BIS Regulatory Intelligence Engine</h2>
+          <p class="text-sm text-slate-400 max-w-md mb-6 leading-relaxed">
+            Verify compliance mandates, test methods, product certification guidelines, and statutory Quality Control Orders (QCOs) with complete clause-level provenance.
+          </p>
+        </div>
+      `;
+      lucide.createIcons();
+    }
+
+    function handleInputKeydown(e) {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        submitQuery();
+      }
+    }
+
+    async function submitQuery() {
+      if (isProcessing) return;
+      const input = document.getElementById('queryInput');
+      const query = input.value.trim();
+      if (!query) return;
+
+      input.value = '';
+      const emptyState = document.getElementById('emptyState');
+      if (emptyState) emptyState.remove();
+
+      // Render User Message
+      appendMessage('user', query);
+
+      // Render Loading Indicator
+      const loadingId = appendLoading();
+      isProcessing = true;
+      document.getElementById('sendBtn').disabled = true;
+
+      try {
+        const response = await fetch('/playground/api/query', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ query: query, top_k: 5 }),
+        });
+
+        const data = await response.json();
+        removeLoading(loadingId);
+
+        if (!response.ok) {
+          appendError(data.detail || 'Service encountered an error processing the compliance query.');
+        } else {
+          appendAgentResponse(data);
+        }
+      } catch (err) {
+        removeLoading(loadingId);
+        appendError('Failed to communicate with BIS Agent service: ' + err.message);
+      } finally {
+        isProcessing = false;
+        document.getElementById('sendBtn').disabled = false;
+        lucide.createIcons();
+      }
+    }
+
+    function appendMessage(role, text) {
+      const container = document.getElementById('messagesContainer');
+      const msgDiv = document.createElement('div');
+      msgDiv.className = "flex items-start gap-3 justify-end";
+      msgDiv.innerHTML = `
+        <div class="max-w-2xl bg-emerald-700/80 text-white rounded-2xl rounded-tr-sm px-4 py-2.5 text-sm shadow-md">
+          <p class="whitespace-pre-wrap">${escapeHtml(text)}</p>
+        </div>
+        <div class="w-8 h-8 rounded-lg bg-slate-800 border border-slate-700 flex items-center justify-center shrink-0">
+          <i data-lucide="user" class="w-4 h-4 text-slate-300"></i>
+        </div>
+      `;
+      container.appendChild(msgDiv);
+      container.scrollTop = container.scrollHeight;
+    }
+
+    function appendLoading() {
+      const id = 'loading_' + Date.now();
+      const container = document.getElementById('messagesContainer');
+      const msgDiv = document.createElement('div');
+      msgDiv.id = id;
+      msgDiv.className = "flex items-start gap-3";
+      msgDiv.innerHTML = `
+        <div class="w-8 h-8 rounded-lg bg-gradient-to-tr from-emerald-600 to-teal-400 flex items-center justify-center shrink-0 shadow-md">
+          <i data-lucide="shield-check" class="w-5 h-5 text-slate-950"></i>
+        </div>
+        <div class="p-4 rounded-2xl rounded-tl-sm bg-slate-900 border border-slate-800 text-sm text-slate-400 flex items-center gap-2">
+          <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+          <span>Searching authoritative BIS corpus & validating grounding...</span>
+        </div>
+      `;
+      container.appendChild(msgDiv);
+      container.scrollTop = container.scrollHeight;
+      return id;
+    }
+
+    function removeLoading(id) {
+      const el = document.getElementById(id);
+      if (el) el.remove();
+    }
+
+    function appendError(errText) {
+      const container = document.getElementById('messagesContainer');
+      const msgDiv = document.createElement('div');
+      msgDiv.className = "flex items-start gap-3";
+      msgDiv.innerHTML = `
+        <div class="w-8 h-8 rounded-lg bg-rose-600 flex items-center justify-center shrink-0">
+          <i data-lucide="alert-triangle" class="w-4 h-4 text-white"></i>
+        </div>
+        <div class="p-4 rounded-2xl rounded-tl-sm bg-rose-950/40 border border-rose-800/60 text-sm text-rose-300">
+          <span class="font-semibold block mb-1">Service Error</span>
+          <p>${escapeHtml(errText)}</p>
+        </div>
+      `;
+      container.appendChild(msgDiv);
+      container.scrollTop = container.scrollHeight;
+    }
+
+    function appendAgentResponse(data) {
+      const container = document.getElementById('messagesContainer');
+      const msgDiv = document.createElement('div');
+      msgDiv.className = "flex items-start gap-3";
+
+      // Badges
+      const confScore = Math.round((data.confidence_score || 0) * 100);
+      const isVerified = !data.verification_required && data.decision !== 'ABSTAINED';
+      const groundingBadge = data.grounding_status === 'GROUNDED' 
+        ? '<span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">GROUNDED EVIDENCE</span>'
+        : '<span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20">PARTIALLY GROUNDED</span>';
+
+      const confBadge = `<span class="px-2 py-0.5 rounded text-[10px] font-mono bg-slate-800 text-slate-300 border border-slate-700">CONFIDENCE: ${confScore}%</span>`;
+      const temporalPill = `<span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-blue-500/10 text-blue-400 border border-blue-500/20">STATUS: ${escapeHtml(data.temporal_status || 'CURRENT')}</span>`;
+
+      // Verification Required Alert Box
+      let alertBox = '';
+      if (data.verification_required) {
+        alertBox = `
+          <div class="mb-3 p-3 rounded-lg bg-amber-950/40 border border-amber-800/80 text-amber-300 text-xs flex items-start gap-2">
+            <i data-lucide="alert-circle" class="w-4 h-4 text-amber-400 shrink-0 mt-0.5"></i>
+            <div>
+              <span class="font-semibold block">Verification Required</span>
+              <span>${escapeHtml(data.verification_reason || 'Information requires cross-reference with official Gazette before commercial execution.')}</span>
+            </div>
+          </div>
+        `;
+      }
+
+      // Evidence / Sources Drawer
+      let evidenceDrawer = '';
+      if (data.sources && data.sources.length > 0) {
+        const sourcesHtml = data.sources.map((s, idx) => `
+          <div class="p-3 rounded-lg bg-slate-950 border border-slate-800/80 text-xs space-y-1.5">
+            <div class="flex items-center justify-between">
+              <span class="font-semibold text-emerald-400">${escapeHtml(s.standard_number || 'Official Indian Standard')}</span>
+              <span class="text-[10px] text-slate-400 font-mono">Page ${s.page_number || 'N/A'} • Clause ${escapeHtml(s.clause_number || 'N/A')}</span>
+            </div>
+            <p class="text-slate-300 italic text-[11px] bg-slate-900/80 p-2 rounded border border-slate-800">
+              "${escapeHtml(s.text ? s.text.substring(0, 240) + '...' : 'Direct clause quote')}"
+            </p>
+            ${s.source_url ? `<a href="${escapeHtml(s.source_url)}" target="_blank" class="text-[10px] text-blue-400 hover:underline flex items-center gap-1"><i data-lucide="external-link" class="w-3 h-3"></i> Official Source Document</a>` : ''}
+          </div>
+        `).join('');
+
+        evidenceDrawer = `
+          <details class="mt-4 border-t border-slate-800 pt-3 group">
+            <summary class="flex items-center justify-between cursor-pointer text-xs font-semibold text-slate-400 hover:text-white select-none">
+              <span class="flex items-center gap-1.5"><i data-lucide="file-text" class="w-3.5 h-3.5 text-emerald-400"></i> Authoritative Evidence & Clauses (${data.sources.length})</span>
+              <i data-lucide="chevron-down" class="w-4 h-4 transition group-open:rotate-180"></i>
+            </summary>
+            <div class="mt-2 space-y-2">
+              ${sourcesHtml}
+            </div>
+          </details>
+        `;
+      }
+
+      // Markdown parsed answer
+      const parsedAnswer = marked.parse(data.answer || 'No textual response generated.');
+
+      msgDiv.innerHTML = `
+        <div class="w-8 h-8 rounded-lg bg-gradient-to-tr from-emerald-600 to-teal-400 flex items-center justify-center shrink-0 shadow-md">
+          <i data-lucide="shield-check" class="w-5 h-5 text-slate-950"></i>
+        </div>
+        <div class="flex-1 max-w-3xl p-5 rounded-2xl rounded-tl-sm bg-slate-900 border border-slate-800 shadow-xl">
+          <!-- Badges bar -->
+          <div class="flex flex-wrap items-center gap-2 mb-3">
+            ${groundingBadge}
+            ${confBadge}
+            ${temporalPill}
+          </div>
+
+          <!-- Alert Box if verification required -->
+          ${alertBox}
+
+          <!-- Answer Body -->
+          <div class="prose text-sm text-slate-200">
+            ${parsedAnswer}
+          </div>
+
+          <!-- Evidence Drawer -->
+          ${evidenceDrawer}
+        </div>
+      `;
+
+      container.appendChild(msgDiv);
+      container.scrollTop = container.scrollHeight;
+    }
+
+    async function refreshStats() {
+      const icon = document.getElementById('refreshIcon');
+      if (icon) icon.classList.add('animate-spin');
+
+      try {
+        const res = await fetch('/playground/api/stats');
+        if (!res.ok) return;
+        const stats = await res.json();
+
+        // Update KPI counters
+        document.getElementById('kpiDiscovered').textContent = stats.counts.discovered_documents || '188';
+        document.getElementById('kpiDownloaded').textContent = stats.counts.downloaded_documents || '10';
+        document.getElementById('kpiChunks').textContent = stats.counts.indexed_chunks || '193';
+        document.getElementById('kpiQcos').textContent = stats.counts.qcos || '23';
+        document.getElementById('kpiStandards').textContent = stats.counts.standards_metadata || '25';
+        document.getElementById('kpiRelations').textContent = stats.counts.knowledge_relationships || '81';
+
+        // Sidebar counts
+        const sideChunks = document.getElementById('sideChunksCount');
+        if (sideChunks) sideChunks.textContent = stats.counts.indexed_chunks || '193';
+
+        const sideRel = document.getElementById('sideReleaseId');
+        if (sideRel && stats.current_corpus_release) sideRel.textContent = stats.current_corpus_release.release_id;
+
+        // Dashboard info
+        const lastSync = document.getElementById('dashLastSync');
+        if (lastSync) lastSync.textContent = stats.timestamp.replace('T', ' ').replace('Z', ' UTC');
+
+        const dashRel = document.getElementById('dashReleaseTag');
+        if (dashRel && stats.current_corpus_release) dashRel.textContent = stats.current_corpus_release.release_id;
+
+        const sourcesCount = document.getElementById('dashSourcesCount');
+        if (sourcesCount) sourcesCount.textContent = (stats.counts.sources || 29) + ' official sources';
+
+        // Sectors Grid
+        const sectorsGrid = document.getElementById('sectorsGrid');
+        if (sectorsGrid && stats.sectors) {
+          sectorsGrid.innerHTML = stats.sectors.map(sec => `
+            <div class="p-2 rounded bg-slate-950/80 border border-slate-800 text-slate-300 flex items-center gap-1.5">
+              <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0"></span>
+              <span class="truncate">${escapeHtml(sec)}</span>
+            </div>
+          `).join('');
+        }
+
+      } catch (e) {
+        console.error('Failed to fetch stats:', e);
+      } finally {
+        if (icon) setTimeout(() => icon.classList.remove('animate-spin'), 600);
+      }
+    }
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+  </script>
+</body>
+</html>

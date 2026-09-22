@@ -1,19 +1,30 @@
-# Official BIS Source Registry
-# Machine-readable registry of verified government and regulatory endpoints for the BIS Intelligence Engine.
+# ==============================================================================
+# Official BIS Source Registry (Comprehensive Edition)
+# Authoritative Indian Standards & Regulatory Source Registry
+#
+# Constraints & Principles:
+# 1. Allowlist enforcement: ONLY official government (.gov.in, .nic.in) and
+#    statutory standards publishing portals are permitted.
+# 2. Strict Rights Policy: Material rights classified as PUBLIC, AUTHORIZED,
+#    LOGIN_REQUIRED, or LICENSE_REQUIRED.
+# 3. Discovery Method: Explicitly defined for each endpoint (API, HTML, Table, etc.).
+# ==============================================================================
 
 sources:
   - source_id: bis_main_portal
     organization: Bureau of Indian Standards
     canonical_url: https://www.bis.gov.in
     source_type: OFFICIAL_PORTAL
+    authority: Bureau of Indian Standards
+    authority_level: STATUTORY_NATIONAL
     jurisdiction: INDIA:NATIONAL
     document_types:
       - GENERAL_INFORMATION
       - ORGANIZATIONAL_STRUCTURE
       - ANNUAL_REPORT
+      - CITIZEN_CHARTER
     discovery_method: HTML_LINK_CRAWL
     crawl_frequency: WEEKLY
-    authority_level: STATUTORY_NATIONAL
     access_policy: PUBLIC
     rights_policy: PUBLIC
     domain_allowlist:
@@ -26,24 +37,108 @@ sources:
     canonical_url: https://www.services.bis.gov.in/php/BIS_2.0/bisconnect/knowyourstandards/indian_standards/isdetails
     search_endpoint: https://www.services.bis.gov.in/php/BIS_2.0/bisconnect/knowyourstandards/Elasticsearch/getsearchAjax
     source_type: REGULATOR_PORTAL
+    authority: Bureau of Indian Standards
+    authority_level: STATUTORY_NATIONAL
     jurisdiction: INDIA:NATIONAL
     document_types:
       - STANDARD_METADATA
       - AMENDMENT_METADATA
       - COMMITTEE_INFO
+      - REAFFIRMATION_RECORD
     discovery_method: ELASTICSEARCH_POST_API
     crawl_frequency: DAILY
-    authority_level: STATUTORY_NATIONAL
     access_policy: PUBLIC
     rights_policy: PUBLIC
     domain_allowlist:
       - www.services.bis.gov.in
+      - services.bis.gov.in
+    enabled: true
+
+  - source_id: bis_published_standards
+    organization: Bureau of Indian Standards - Standards Promotion
+    canonical_url: https://www.bis.gov.in/standards/standards-development/published-standards/
+    source_type: STANDARDS_BODY
+    authority: Bureau of Indian Standards
+    authority_level: STATUTORY_NATIONAL
+    jurisdiction: INDIA:NATIONAL
+    document_types:
+      - PUBLISHED_STANDARD_CATALOG
+      - DIVISION_DIRECTORY
+      - SECTIONAL_COMMITTEE_LIST
+    discovery_method: HTML_LINK_CRAWL
+    crawl_frequency: WEEKLY
+    access_policy: PUBLIC
+    rights_policy: PUBLIC
+    domain_allowlist:
+      - www.bis.gov.in
+      - bis.gov.in
+    enabled: true
+
+  - source_id: bis_new_standards_gazette
+    organization: Bureau of Indian Standards - Gazette Notification Desk
+    canonical_url: https://www.bis.gov.in/standards/standards-development/new-standards/
+    source_type: STANDARDS_BODY
+    authority: Bureau of Indian Standards
+    authority_level: STATUTORY_NATIONAL
+    jurisdiction: INDIA:NATIONAL
+    document_types:
+      - NEW_STANDARD_NOTIFICATION
+      - GAZETTE_ESTABLISHMENT
+    discovery_method: TABLE_PARSING
+    crawl_frequency: WEEKLY
+    access_policy: PUBLIC
+    rights_policy: PUBLIC
+    domain_allowlist:
+      - www.bis.gov.in
+      - bis.gov.in
+    enabled: true
+
+  - source_id: bis_revised_standards_bulletin
+    organization: Bureau of Indian Standards - Revision Directorate
+    canonical_url: https://www.bis.gov.in/standards/standards-development/revised-standards/
+    source_type: STANDARDS_BODY
+    authority: Bureau of Indian Standards
+    authority_level: STATUTORY_NATIONAL
+    jurisdiction: INDIA:NATIONAL
+    document_types:
+      - REVISED_STANDARD_NOTIFICATION
+      - SUPERSEDED_MAPPING
+      - TRANSITION_TIMELINE
+    discovery_method: TABLE_PARSING
+    crawl_frequency: WEEKLY
+    access_policy: PUBLIC
+    rights_policy: PUBLIC
+    domain_allowlist:
+      - www.bis.gov.in
+      - bis.gov.in
+    enabled: true
+
+  - source_id: bis_standards_under_review
+    organization: Bureau of Indian Standards - Standards Formulation
+    canonical_url: https://www.services.bis.gov.in/php/BIS_2.0/bisconnect/wide_circulation/
+    source_type: STANDARDS_BODY
+    authority: Bureau of Indian Standards
+    authority_level: STATUTORY_NATIONAL
+    jurisdiction: INDIA:NATIONAL
+    document_types:
+      - WIDE_CIRCULATION_DRAFT
+      - DRAFT_AMENDMENT
+      - PUBLIC_COMMENT_DOCUMENT
+    discovery_method: HTML_LINK_CRAWL
+    crawl_frequency: BIWEEKLY
+    access_policy: PUBLIC
+    rights_policy: PUBLIC
+    domain_allowlist:
+      - www.services.bis.gov.in
+      - services.bis.gov.in
     enabled: true
 
   - source_id: bis_product_specific_guidelines
     organization: Bureau of Indian Standards - Product Certification
     canonical_url: https://www.bis.gov.in/product-certification/product-specific-guidelines/
     source_type: OFFICIAL_PORTAL
+    authority: Bureau of Indian Standards
+    authority_level: STATUTORY_NATIONAL
     jurisdiction: INDIA:NATIONAL
     document_types:
       - PRODUCT_MANUAL
@@ -51,7 +146,46 @@ sources:
       - CERTIFICATION_GUIDANCE
     discovery_method: TABLE_PARSING
     crawl_frequency: WEEKLY
+    access_policy: PUBLIC
+    rights_policy: PUBLIC
+    domain_allowlist:
+      - www.bis.gov.in
+      - bis.gov.in
+    enabled: true
+
+  - source_id: bis_product_manuals_and_sit
+    organization: Bureau of Indian Standards - Certification Department
+    canonical_url: https://www.services.bis.gov.in/php/BIS_2.0/dgfm/product_manuals/
+    source_type: REGULATOR_PORTAL
+    authority: Bureau of Indian Standards
     authority_level: STATUTORY_NATIONAL
+    jurisdiction: INDIA:NATIONAL
+    document_types:
+      - SCHEME_OF_INSPECTION_AND_TESTING
+      - PRODUCT_MANUAL
+      - SAMPLE_FREQUENCY_GUIDE
+    discovery_method: TABLE_PARSING
+    crawl_frequency: WEEKLY
+    access_policy: PUBLIC
+    rights_policy: PUBLIC
+    domain_allowlist:
+      - www.services.bis.gov.in
+      - services.bis.gov.in
+    enabled: true
+
+  - source_id: bis_grouping_guidelines
+    organization: Bureau of Indian Standards - Certification Guidelines Desk
+    canonical_url: https://www.bis.gov.in/product-certification/grouping-guidelines/
+    source_type: OFFICIAL_PORTAL
+    authority: Bureau of Indian Standards
+    authority_level: STATUTORY_NATIONAL
+    jurisdiction: INDIA:NATIONAL
+    document_types:
+      - GROUPING_GUIDELINE
+      - VARIETIES_COVERED_TABLE
+      - SAMPLING_PROTOCOL
+    discovery_method: TABLE_PARSING
+    crawl_frequency: MONTHLY
     access_policy: PUBLIC
     rights_policy: PUBLIC
     domain_allowlist:
@@ -63,6 +197,8 @@ sources:
     organization: Bureau of Indian Standards - Conformity Assessment
     canonical_url: https://www.bis.gov.in/product-certification/products-under-compulsory-certification/
     source_type: OFFICIAL_PORTAL
+    authority: Bureau of Indian Standards
+    authority_level: STATUTORY_NATIONAL
     jurisdiction: INDIA:NATIONAL
     document_types:
       - MANDATORY_PRODUCT_LIST
@@ -78,18 +214,98 @@ sources:
       - bis.gov.in
     enabled: true
 
+  - source_id: bis_scheme_1_isi_mark
+    organization: Bureau of Indian Standards - Certification Scheme I (ISI Mark)
+    canonical_url: https://www.bis.gov.in/product-certification/scheme-i-mark/
+    source_type: OFFICIAL_PORTAL
+    authority: Bureau of Indian Standards
+    authority_level: STATUTORY_NATIONAL
+    jurisdiction: INDIA:NATIONAL
+    document_types:
+      - SCHEME_1_PROCEDURES
+      - CONFORMITY_REGULATIONS
+      - MARKING_FEE_SCHEDULE
+    discovery_method: HTML_LINK_CRAWL
+    crawl_frequency: MONTHLY
+    access_policy: PUBLIC
+    rights_policy: PUBLIC
+    domain_allowlist:
+      - www.bis.gov.in
+      - bis.gov.in
+    enabled: true
+
+  - source_id: bis_scheme_2_crs
+    organization: Bureau of Indian Standards - Compulsory Registration Scheme (CRS)
+    canonical_url: https://www.crsbis.in/BIS/
+    source_type: REGULATOR_PORTAL
+    authority: Bureau of Indian Standards & MeitY
+    authority_level: STATUTORY_NATIONAL
+    jurisdiction: INDIA:NATIONAL
+    document_types:
+      - CRS_PRODUCT_LIST
+      - REGISTRATION_GUIDELINE
+      - TEST_REPORT_FORMAT
+    discovery_method: HTML_LINK_CRAWL
+    crawl_frequency: WEEKLY
+    access_policy: PUBLIC
+    rights_policy: PUBLIC
+    domain_allowlist:
+      - www.crsbis.in
+      - crsbis.in
+    enabled: true
+
+  - source_id: bis_scheme_4_conformity
+    organization: Bureau of Indian Standards - Scheme IV (Certificate of Conformity)
+    canonical_url: https://www.bis.gov.in/product-certification/scheme-iv-certificate-of-conformity/
+    source_type: OFFICIAL_PORTAL
+    authority: Bureau of Indian Standards
+    authority_level: STATUTORY_NATIONAL
+    jurisdiction: INDIA:NATIONAL
+    document_types:
+      - SCHEME_4_PROCEDURES
+      - BATCH_TESTING_RULES
+    discovery_method: HTML_LINK_CRAWL
+    crawl_frequency: MONTHLY
+    access_policy: PUBLIC
+    rights_policy: PUBLIC
+    domain_allowlist:
+      - www.bis.gov.in
+      - bis.gov.in
+    enabled: true
+
+  - source_id: bis_scheme_10_fmcs
+    organization: Bureau of Indian Standards - Foreign Manufacturers Certification Scheme
+    canonical_url: https://www.bis.gov.in/fmcs/
+    source_type: OFFICIAL_PORTAL
+    authority: Bureau of Indian Standards
+    authority_level: STATUTORY_NATIONAL
+    jurisdiction: INDIA:NATIONAL
+    document_types:
+      - FMCS_GUIDELINES
+      - AIR_NOMINATION_FORMAT
+      - FOREIGN_AUDIT_PROTOCOL
+    discovery_method: HTML_LINK_CRAWL
+    crawl_frequency: MONTHLY
+    access_policy: PUBLIC
+    rights_policy: PUBLIC
+    domain_allowlist:
+      - www.bis.gov.in
+      - bis.gov.in
+    enabled: true
+
   - source_id: bis_standards_publishing_portal
-    organization: Bureau of Indian Standards - Standards Portal
+    organization: Bureau of Indian Standards - Standards Portal (BSB Edge)
     canonical_url: https://standardsbis.bsbedge.com
     search_endpoint: https://standardsbis.bsbedge.com/BIS_SearchStandard.aspx
     source_type: STANDARDS_BODY
+    authority: Bureau of Indian Standards
+    authority_level: STATUTORY_NATIONAL
     jurisdiction: INDIA:NATIONAL
     document_types:
-      - STANDARD
-      - AMENDMENT
+      - STANDARD_FULL_TEXT
+      - AMENDMENT_DOCUMENT
     discovery_method: HTTP_SEARCH
     crawl_frequency: WEEKLY
-    authority_level: STATUTORY_NATIONAL
     access_policy: LICENSE_REQUIRED
     rights_policy: LICENSED
     domain_allowlist:
@@ -100,14 +316,15 @@ sources:
     organization: Bureau of Indian Standards - e-BIS Manakonline
     canonical_url: https://www.manakonline.in/MANAK/home
     source_type: OFFICIAL_PORTAL
+    authority: Bureau of Indian Standards
+    authority_level: STATUTORY_NATIONAL
     jurisdiction: INDIA:NATIONAL
     document_types:
       - APPLICATION_GUIDELINES
-      - LAB_DIRECTORY
       - SURVEILLANCE_PROCEDURES
+      - FEE_STRUCTURE
     discovery_method: HTML_LINK_CRAWL
     crawl_frequency: WEEKLY
-    authority_level: STATUTORY_NATIONAL
     access_policy: PUBLIC
     rights_policy: PUBLIC
     domain_allowlist:
@@ -116,37 +333,120 @@ sources:
       - huid.manakonline.in
     enabled: true
 
+  - source_id: bis_laboratory_network
+    organization: Bureau of Indian Standards - Central Laboratory & Recognized Labs
+    canonical_url: https://www.manakonline.in/MANAK/labsearch
+    source_type: LABORATORY_REGISTRY
+    authority: Bureau of Indian Standards
+    authority_level: STATUTORY_NATIONAL
+    jurisdiction: INDIA:NATIONAL
+    document_types:
+      - LAB_DIRECTORY
+      - SCOPE_OF_RECOGNITION
+      - ACCREDITED_TEST_METHODS
+    discovery_method: HTML_SEARCH
+    crawl_frequency: MONTHLY
+    access_policy: PUBLIC
+    rights_policy: PUBLIC
+    domain_allowlist:
+      - www.manakonline.in
+      - manakonline.in
+    enabled: true
+
   - source_id: dpiit_qco_repository
     organization: Department for Promotion of Industry and Internal Trade (DPIIT)
     canonical_url: https://dpiit.gov.in/quality-control-orders
     source_type: MINISTRY_PORTAL
+    authority: Ministry of Commerce and Industry - DPIIT
+    authority_level: CENTRAL_MINISTRY
     jurisdiction: INDIA:NATIONAL
     document_types:
       - QCO
       - QCO_AMENDMENT
       - ENFORCEMENT_EXTENSION
+      - UPCOMING_QCO_DRAFT
     discovery_method: TABLE_PARSING
     crawl_frequency: WEEKLY
-    authority_level: CENTRAL_MINISTRY
     access_policy: PUBLIC
     rights_policy: PUBLIC
     domain_allowlist:
       - dpiit.gov.in
+      - www.dpiit.gov.in
+    enabled: true
+
+  - source_id: ministry_of_steel_qco
+    organization: Ministry of Steel - Quality Control Orders
+    canonical_url: https://steel.gov.in/en/quality-control-order
+    source_type: MINISTRY_PORTAL
+    authority: Ministry of Steel
+    authority_level: CENTRAL_MINISTRY
+    jurisdiction: INDIA:NATIONAL
+    document_types:
+      - STEEL_QCO
+      - STEEL_PRODUCT_STANDARDS_MAPPING
+    discovery_method: TABLE_PARSING
+    crawl_frequency: BIWEEKLY
+    access_policy: PUBLIC
+    rights_policy: PUBLIC
+    domain_allowlist:
+      - steel.gov.in
+      - www.steel.gov.in
+    enabled: true
+
+  - source_id: meity_cro_repository
+    organization: Ministry of Electronics and Information Technology (MeitY)
+    canonical_url: https://www.meity.gov.in/esdm/standards
+    source_type: MINISTRY_PORTAL
+    authority: Ministry of Electronics and Information Technology
+    authority_level: CENTRAL_MINISTRY
+    jurisdiction: INDIA:NATIONAL
+    document_types:
+      - CRO_NOTIFICATION
+      - ELECTRONICS_MANDATORY_LIST
+      - EXEMPTION_CIRCULAR
+    discovery_method: HTML_LINK_CRAWL
+    crawl_frequency: WEEKLY
+    access_policy: PUBLIC
+    rights_policy: PUBLIC
+    domain_allowlist:
+      - meity.gov.in
+      - www.meity.gov.in
+    enabled: true
+
+  - source_id: moca_qco_repository
+    organization: Ministry of Consumer Affairs, Food & Public Distribution
+    canonical_url: https://consumeraffairs.nic.in/acts-and-rules/quality-control-orders
+    source_type: MINISTRY_PORTAL
+    authority: Ministry of Consumer Affairs
+    authority_level: CENTRAL_MINISTRY
+    jurisdiction: INDIA:NATIONAL
+    document_types:
+      - CONSUMER_PROTECTION_QCO
+      - HALLMARKING_ORDER
+    discovery_method: TABLE_PARSING
+    crawl_frequency: MONTHLY
+    access_policy: PUBLIC
+    rights_policy: PUBLIC
+    domain_allowlist:
+      - consumeraffairs.nic.in
     enabled: true
 
   - source_id: egazette_india_notifications
     organization: Directorate of Printing - Gazette of India
     canonical_url: https://egazette.gov.in
     source_type: GAZETTE
+    authority: Government of India
+    authority_level: CENTRAL_MINISTRY
     jurisdiction: INDIA:NATIONAL
     document_types:
       - GAZETTE_NOTIFICATION
       - STATUTORY_ORDER
+      - S_O_NOTIFICATION
     discovery_method: GAZETTE_SEARCH
     crawl_frequency: DAILY
-    authority_level: CENTRAL_MINISTRY
     access_policy: PUBLIC
     rights_policy: PUBLIC
     domain_allowlist:
       - egazette.gov.in
+      - www.egazette.gov.in
     enabled: true

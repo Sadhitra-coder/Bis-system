@@ -1,0 +1,160 @@
+{
+  "release_id": "corpus-release-0001",
+  "manifest_version": "1.0.0",
+  "created_at": "2026-09-22T16:12:08.307901+00:00",
+  "git_commit": "82358b3a7b",
+  "description": "Official BIS Knowledge Base Immutable Release",
+  "source_sync_timestamp": "2026-09-22T16:12:08.307901+00:00",
+  "metrics": {
+    "standards_count": 3,
+    "standard_versions_count": 3,
+    "standard_parts_count": 1,
+    "clauses_count": 69,
+    "amendments_count": 0,
+    "standard_references_count": 15,
+    "temporal_relationships_count": 0,
+    "source_registry_count": 29,
+    "document_rights_ledger_count": 8,
+    "discovered_items_count": 0,
+    "standards_metadata_catalog_count": 25,
+    "qcos_count": 23,
+    "products_count": 27,
+    "certification_schemes_count": 8,
+    "test_methods_count": 6,
+    "product_manuals_count": 9,
+    "laboratories_count": 5,
+    "authorities_count": 5,
+    "jurisdictions_count": 4,
+    "knowledge_relationships_count": 81,
+    "sync_history_count": 0,
+    "discovered_documents_count": 188,
+    "acquisition_audit_log_count": 13,
+    "acquisition_jobs_count": 6,
+    "indexed_chunks_count": 193,
+    "downloaded_documents_count": 10
+  },
+  "checksums": {
+    "bis_knowledge_db_sha256": "0ce35e1b023c80b8b079a31ed883e9ca816ffc97d0e1fe6714632fd73c8323ab",
+    "chroma_sqlite3_sha256": "7f67a5a3e11a6505556f764d3f83ba34da12c2a5905c0821983fda5d4a15cbee"
+  },
+  "rights_summary": {
+    "LICENSE_REQUIRED": 64,
+    "PUBLIC": 124
+  },
+  "documents": [
+    {
+      "document_id": "doc_pm_14591ea9a32d45bc",
+      "filename": "IS_13422__2024___ISO_10282__2023.pdf",
+      "standard_number": "IS 13422 2024  ISO 10282 2023",
+      "title": "Official BIS Manual / Specification (IS_13422__2024___ISO_10282__2023)",
+      "sha256": "6cec51c8b6c06fda62d6b9351d53e82b7090bab28d4ff78a51f9ccb426743778",
+      "size_bytes": 1312727,
+      "rights_status": "PUBLIC"
+    },
+    {
+      "document_id": "doc_pm_1eafdd89bafd6ccc",
+      "filename": "IS_3055__Part_1____1994.pdf",
+      "standard_number": "IS 3055 Part 1  1994",
+      "title": "Official BIS Manual / Specification (IS_3055__Part_1____1994)",
+      "sha256": "ccdd0933812551657e5cae4a7047c9716fa44b4a39e278a5aa56a1116c807f70",
+      "size_bytes": 227128,
+      "rights_status": "PUBLIC"
+    },
+    {
+      "document_id": "doc_pm_4f0c83893414c3cd",
+      "filename": "IS_9873__Part_1____2019.pdf",
+      "standard_number": "IS 9873 Part 1  2019",
+      "title": "Official BIS Manual / Specification (IS_9873__Part_1____2019)",
+      "sha256": "103a9b77a1360662f7f468d798ca946fe221c877e9e9bef7938dc5e0d41df34f",
+      "size_bytes": 1601912,
+      "rights_status": "PUBLIC"
+    },
+    {
+      "document_id": "doc_pm_5909f2752e6169bc",
+      "filename": "IS_1786___2008.pdf",
+      "standard_number": "IS 1786  2008",
+      "title": "Official BIS Manual / Specification (IS_1786___2008)",
+      "sha256": "ad582237ec1047ee3f72eb27df4975cf4a3650d8e7be9aa8da1921844e6fef56",
+      "size_bytes": 412903,
+      "rights_status": "PUBLIC"
+    },
+    {
+      "document_id": "doc_pm_596865ed5110bfc1",
+      "filename": "IS_9283_2024.pdf",
+      "standard_number": "IS 9283 2024",
+      "title": "Official BIS Manual / Specification (IS_9283_2024)",
+      "sha256": "330bd3178d8db831c146b516d51f0607678bb34738e5f813713ecb66a035d699",
+      "size_bytes": 1012708,
+      "rights_status": "PUBLIC"
+    },
+    {
+      "document_id": "doc_pm_6c2e5d1b46900583",
+      "filename": "IS_16444__PART_1__2015.pdf",
+      "standard_number": "IS 16444 PART 1 2015",
+      "title": "Official BIS Manual / Specification (IS_16444__PART_1__2015)",
+      "sha256": "a3f46c7f6f3a11d2a971dc8bc27074fb771abc58758b009509ed9028ba77edeb",
+      "size_bytes": 1081197,
+      "rights_status": "PUBLIC"
+    },
+    {
+      "document_id": "doc_pm_a668874801ec2610",
+      "filename": "IS_16444__PART_2__2017.pdf",
+      "standard_number": "IS 16444 PART 2 2017",
+      "title": "Official BIS Manual / Specification (IS_16444__PART_2__2017)",
+      "sha256": "54c62a19eddfc2a5b118de299eceaf2374ab069903a61e41bf034c4ebdac42c4",
+      "size_bytes": 589798,
+      "rights_status": "PUBLIC"
+    },
+    {
+      "document_id": "doc_pm_c1ece2eab4bc1bad",
+      "filename": "आई_एस_1293_2019.pdf",
+      "standard_number": "आई एस 1293 2019",
+      "title": "Official BIS Manual / Specification (आई_एस_1293_2019)",
+      "sha256": "0da54398612ffcfc75b77af3893fcd9cb5ce5f86ec113dd6de31b41f5feaf4c1",
+      "size_bytes": 1468871,
+      "rights_status": "PUBLIC"
+    },
+    {
+      "document_id": "doc_pm_e5ef8a4f9de916e2",
+      "filename": "IS_12933__Part_1__2003.pdf",
+      "standard_number": "IS 12933 Part 1 2003",
+      "title": "Official BIS Manual / Specification (IS_12933__Part_1__2003)",
+      "sha256": "f739297c3d8b972707ac1f6e5ce2c90f0b50ae09ca6f9699cf2a2bc1a5d5cf31",
+      "size_bytes": 607306,
+      "rights_status": "PUBLIC"
+    },
+    {
+      "document_id": "doc_pm_fcc94ef8ab898d98",
+      "filename": "IS_694___2010.pdf",
+      "standard_number": "IS 694  2010",
+      "title": "Official BIS Manual / Specification (IS_694___2010)",
+      "sha256": "e167461b8f43430db72f06258f8af1a00c3a7fa2d2a000d73d0fe68cd363069a",
+      "size_bytes": 840824,
+      "rights_status": "PUBLIC"
+    }
+  ],
+  "sectors_covered": [
+    "Automotive & Electric Mobility",
+    "Automotive & Glass",
+    "Construction & Cement",
+    "Consumer Products & Child Safety",
+    "Electrical & Electronics",
+    "Electrical & Smart Grid",
+    "Electrical Accessories",
+    "Electrical Cables & Conductors",
+    "Food, Water & Beverages",
+    "Footwear & Industrial Safety",
+    "Footwear & Leather",
+    "Information Technology & Electronics",
+    "Lighting & Electronics",
+    "Medical Equipment",
+    "Medical Rubber Goods",
+    "Plastics & Piping",
+    "Precious Metals & Hallmarking",
+    "Pumps & Irrigation",
+    "Solar & Renewable Energy",
+    "Steel & Metallurgy",
+    "Textiles & Defence",
+    "Water & Public Health"
+  ]
+}

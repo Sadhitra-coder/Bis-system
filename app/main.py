@@ -120,11 +120,15 @@ app = FastAPI(
 
 app.add_middleware(CorrelationIdMiddleware)
 
+from app.playground.router import router as playground_router
+
 # Mount API routers (protect upload and query with internal service key)
 app.include_router(upload.router, dependencies=[Depends(verify_internal_service_key)])
 app.include_router(query.router, dependencies=[Depends(verify_internal_service_key)])
 app.include_router(status.router)
 app.include_router(jobs.router)
+app.include_router(playground_router)
+
 
 
 @app.get("/health")

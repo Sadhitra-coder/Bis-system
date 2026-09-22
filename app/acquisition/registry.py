@@ -211,6 +211,88 @@ class SourceRegistry:
         for s in baseline_sources:
             if not self.get_source(s.source_id):
                 self.register_source(s)
+        self.sync_from_yaml()
+
+    def sync_from_yaml(self, yaml_path: Optional[Path] = None) -> int:
+        """
+        Synchronize source records from data/sources/bis_sources.yaml into the SQLite registry.
+        """
+        import yaml
+        from urllib.parse import urlparse
+
+        target_yaml = Path(yaml_path) if yaml_path else DATA_DIR / "sources" / "bis_sources.yaml"
+        if not target_yaml.exists():
+            logger.warning("Sources YAML not found at %s", target_yaml)
+            return 0
+
+        try:
+            with open(target_yaml, "r", encoding="utf-8") as f:
+                data = yaml.safe_load(f)
+            
+            raw_sources = data.get("sources", [])
+            synced_count = 0
+            now = time.time()
+
+            for item in raw_sources:
+                source_id = item.get("source_id")
+                canonical_url = item.get("canonical_url", "")
+                parsed = urlparse(canonical_url)
+                domain = parsed.netloc or item.get("organization", "bis.gov.in")
+                
+                # Document classes mapping
+                doc_types = item.get("document_types", ["STANDARD"])
+                allowed_classes = []
+                for dt in doc_types:
+                    try:
+                        allowed_classes.append(DocumentClass(dt))
+                    except Exception:
+                        allowed_classes.append(DocumentClass.STANDARD)
+
+                # Source Type mapping
+                st_raw = item.get("source_type", "OFFICIAL_PORTAL")
+                try:
+                    source_type = SourceType(st_raw)
+                except Exception:
+                    source_type = SourceType.OFFICIAL_PORTAL
+
+                # Authority level mapping
+                al_raw = item.get("authority_level", "STATUTORY_NATIONAL")
+                try:
+                    auth_level = AuthorityLevel(al_raw)
+                except Exception:
+                    auth_level = AuthorityLevel.STATUTORY_NATIONAL
+
+                # Rights mapping
+                rp_raw = item.get("rights_policy", "PUBLIC")
+                try:
+                    rights_policy = LicenseStatus(rp_raw)
+                except Exception:
+                    rights_policy = LicenseStatus.PUBLIC
+
+                record = SourceRegistryRecord(
+                    source_id=source_id,
+                    source_organization=item.get("organization", "Bureau of Indian Standards"),
+                    source_domain=domain,
+                    source_type=source_type,
+                    authority_level=auth_level,
+                    jurisdiction=JurisdictionCode.INDIA_NATIONAL,
+                    allowed_document_classes=allowed_classes,
+                    crawl_frequency=CrawlFrequency.WEEKLY,
+                    parser="bis_official_parser",
+                    license_access_policy=rights_policy,
+                    source_url=canonical_url,
+                    is_active=item.get("enabled", True),
+                    created_at=now,
+                    updated_at=now,
+                )
+                self.register_source(record)
+                synced_count += 1
+
+            logger.info("Successfully synchronized %d official sources from YAML into SQLite source_registry.", synced_count)
+            return synced_count
+        except Exception as exc:
+            logger.error("Error syncing sources from YAML %s: %s", target_yaml, exc)
+            return 0
 
     def register_source(self, record: SourceRegistryRecord) -> None:
         """Insert or update a source record."""
