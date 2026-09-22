@@ -2,7 +2,7 @@
   "release_id": "corpus-release-0001",
   "manifest_version": "1.0.0",
   "created_at": "2026-09-22T17:19:52.749067+00:00",
-  "git_commit": "b0e10162f0",
+  "git_commit": "d1b0ecd8ce",
   "description": "Official BIS Knowledge Base Immutable Release v1",
   "source_sync_timestamp": "2026-09-22T17:19:52.749067+00:00",
   "metrics": {
@@ -107,9 +107,9 @@
     },
     {
       "document_id": "doc_pm_c1ece2eab4bc1bad",
-      "filename": "आई_एस_1293_2019.pdf",
-      "standard_number": "आई एस 1293 2019",
-      "title": "Official BIS Manual / Specification (आई_एस_1293_2019)",
+      "filename": "\u0906\u0908_\u090f\u0938_1293_2019.pdf",
+      "standard_number": "\u0906\u0908 \u090f\u0938 1293 2019",
+      "title": "Official BIS Manual / Specification (\u0906\u0908_\u090f\u0938_1293_2019)",
       "sha256": "0da54398612ffcfc75b77af3893fcd9cb5ce5f86ec113dd6de31b41f5feaf4c1",
       "size_bytes": 1468871,
       "rights_status": "PUBLIC"
