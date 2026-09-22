@@ -1,10 +1,10 @@
 {
   "release_id": "corpus-release-0001",
   "manifest_version": "1.0.0",
-  "created_at": "2026-09-22T16:57:21.321621+00:00",
-  "git_commit": "551bb8dd83",
+  "created_at": "2026-09-22T17:19:52.749067+00:00",
+  "git_commit": "b0e10162f0",
   "description": "Official BIS Knowledge Base Immutable Release v1",
-  "source_sync_timestamp": "2026-09-22T16:57:21.321621+00:00",
+  "source_sync_timestamp": "2026-09-22T17:19:52.749067+00:00",
   "metrics": {
     "standards_count": 3,
     "standard_versions_count": 3,
@@ -35,7 +35,7 @@
   },
   "checksums": {
     "bis_knowledge_db_sha256": "0ce35e1b023c80b8b079a31ed883e9ca816ffc97d0e1fe6714632fd73c8323ab",
-    "chroma_sqlite3_sha256": "dfb4868ccc3bae44af61bcf360fad37e64869fdae9c22e42edc62e2889269bcd"
+    "chroma_sqlite3_sha256": "52c5ecd6be219e82fa91324ad24732b923c9bc02915379cf0773cb35e7d7bad5"
   },
   "rights_summary": {
     "LICENSE_REQUIRED": 64,
