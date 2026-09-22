@@ -4,6 +4,10 @@ param containerAppName string = 'bis-system-v5'
 param containerImage string
 @secure()
 param internalServiceKey string
+param registryServer string = ''
+param registryUsername string = ''
+@secure()
+param registryPassword string = ''
 
 resource environment 'Microsoft.App/managedEnvironments@2024-03-01' = {
   name: environmentName
@@ -35,10 +39,26 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
           }
         ]
       }
-      secrets: [
+      secrets: empty(registryPassword) ? [
         {
           name: 'internal-service-key'
           value: internalServiceKey
+        }
+      ] : [
+        {
+          name: 'internal-service-key'
+          value: internalServiceKey
+        }
+        {
+          name: 'registry-password'
+          value: registryPassword
+        }
+      ]
+      registries: empty(registryPassword) ? [] : [
+        {
+          server: registryServer
+          username: registryUsername
+          passwordSecretRef: 'registry-password'
         }
       ]
     }
