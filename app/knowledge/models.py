@@ -14,7 +14,7 @@ Preserves full source provenance down to source_document_id, source_chunk_ids, a
 """
 
 from enum import Enum
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field
 
 
@@ -172,3 +172,115 @@ class KnowledgeDiagnostics(BaseModel):
     unresolved_references: int = 0
     validation_warnings: List[str] = Field(default_factory=list)
     validation_errors: List[str] = Field(default_factory=list)
+
+
+# ============================================================
+# EXPANDED COMPLIANCE GRAPH ENTITIES (Requirement 6 & 7)
+# ============================================================
+
+class RelationshipType(str, Enum):
+    """Expanded canonical knowledge graph relationship types."""
+    APPLIES_TO = "APPLIES_TO"
+    AMENDS = "AMENDS"
+    SUPERSEDES = "SUPERSEDES"
+    WITHDRAWN_BY = "WITHDRAWN_BY"
+    REFERENCES = "REFERENCES"
+    REQUIRES = "REQUIRES"
+    CERTIFIED_UNDER = "CERTIFIED_UNDER"
+    TESTED_BY = "TESTED_BY"
+    EFFECTIVE_FROM = "EFFECTIVE_FROM"
+    EFFECTIVE_TO = "EFFECTIVE_TO"
+
+
+class QCO(BaseModel):
+    """Quality Control Order statutory regulation issued by central ministry."""
+    qco_id: str
+    qco_number: str                 # e.g. 'S.O. 4345(E)'
+    title: str
+    issuing_ministry: str           # e.g. 'Ministry of Consumer Affairs'
+    order_date: Optional[str] = None
+    enforcement_date: Optional[str] = None
+    document_id: str
+    is_mandatory: bool = True
+    created_at: float
+
+
+class ProductEntity(BaseModel):
+    """Industrial or consumer product category covered by standards/QCOs."""
+    product_id: str
+    product_name: str
+    category: str
+    hs_code: Optional[str] = None
+    created_at: float
+
+
+class CertificationScheme(BaseModel):
+    """BIS conformity assessment scheme (Scheme I - ISI Mark, Scheme II - CRS, Scheme IV - Hallmarking)."""
+    scheme_id: str
+    scheme_name: str
+    scheme_code: str
+    description: Optional[str] = None
+    created_at: float
+
+
+class TestMethod(BaseModel):
+    """Laboratory test method and sampling standard."""
+    test_method_id: str
+    test_number: str
+    title: str
+    sampling_procedure: Optional[str] = None
+    created_at: float
+
+
+class ProductManual(BaseModel):
+    """BIS Product Certification Manual / Scheme of Testing & Inspection (STI)."""
+    manual_id: str
+    standard_id: str
+    title: str
+    edition_or_year: Optional[str] = None
+    document_id: str
+    source_url: Optional[str] = None
+    created_at: float
+
+
+class Laboratory(BaseModel):
+    """BIS recognized or NABL accredited testing laboratory."""
+    lab_id: str
+    name: str
+    city: str
+    state: str
+    accreditation_number: Optional[str] = None
+    scope_of_testing: List[str] = Field(default_factory=list)
+    created_at: float
+
+
+class AuthorityEntity(BaseModel):
+    """Statutory or regulatory governing authority."""
+    authority_id: str
+    name: str
+    jurisdiction: str
+    portal_url: Optional[str] = None
+    created_at: float
+
+
+class JurisdictionEntity(BaseModel):
+    """First-class geographical jurisdiction."""
+    jurisdiction_code: str          # e.g. 'INDIA:NATIONAL', 'UK:ENGLAND'
+    country: str                    # 'INDIA', 'UK'
+    level: str                      # 'NATIONAL', 'STATE'
+    name: str
+    created_at: float
+
+
+class KnowledgeRelationship(BaseModel):
+    """Multi-hop directed graph relationship between any two knowledge entities."""
+    relationship_id: str
+    source_entity_type: str         # 'standard', 'qco', 'product', 'manual'
+    source_entity_id: str
+    target_entity_type: str         # 'product', 'standard', 'scheme', 'lab'
+    target_entity_id: str
+    relationship_type: RelationshipType
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+    confidence: float = 1.0
+    created_at: float
+

@@ -315,7 +315,7 @@ def test_adversarial_qualitative_string_value():
 # ============================================================
 
 def test_evaluation_dataset_10_scenarios():
-    eval_path = Path("E:/Bis-system/data/evaluation/technical_spec_eval_dataset.json")
+    eval_path = Path(__file__).resolve().parent.parent / "data" / "evaluation" / "technical_spec_eval_dataset.json"
     assert eval_path.exists(), "Evaluation dataset must exist"
 
     with open(eval_path, "r", encoding="utf-8") as f:

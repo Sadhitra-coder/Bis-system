@@ -94,25 +94,36 @@ def extract_pdf(
 
     try:
 
-        # Docling extraction
-        converter = DocumentConverter()
-        result = converter.convert(str(input_path))
-        doc = result.document
+        # Docling extraction with pypdf fallback
+        markdown = ""
+        try:
+            converter = DocumentConverter()
+            result = converter.convert(str(input_path))
+            doc = result.document
 
-        # Export page-by-page to preserve page boundaries in Markdown
-        page_markdowns = []
-        if hasattr(doc, "pages") and doc.pages:
-            for page_no in sorted(doc.pages.keys()):
-                p_md = doc.export_to_markdown(page_no=page_no)
-                if p_md.strip():
-                    page_markdowns.append(f"<!-- PAGE {page_no} -->\n\n" + p_md.strip())
+            page_markdowns = []
+            if hasattr(doc, "pages") and doc.pages:
+                for page_no in sorted(doc.pages.keys()):
+                    p_md = doc.export_to_markdown(page_no=page_no)
+                    if p_md.strip():
+                        page_markdowns.append(f"<!-- PAGE {page_no} -->\n\n" + p_md.strip())
 
-        if not page_markdowns:
-            raw_md = doc.export_to_markdown()
-            if raw_md.strip():
-                page_markdowns.append("<!-- PAGE 1 -->\n\n" + raw_md.strip())
+            if not page_markdowns:
+                raw_md = doc.export_to_markdown()
+                if raw_md.strip():
+                    page_markdowns.append("<!-- PAGE 1 -->\n\n" + raw_md.strip())
 
-        markdown = "\n\n".join(page_markdowns)
+            markdown = "\n\n".join(page_markdowns)
+        except Exception as docling_err:
+            logger.warning("Docling extraction unavailable (%s); using pypdf offline fallback.", docling_err)
+            import pypdf
+            reader = pypdf.PdfReader(str(input_path))
+            page_markdowns = []
+            for page_idx, page in enumerate(reader.pages, start=1):
+                text = page.extract_text() or ""
+                if text.strip():
+                    page_markdowns.append(f"<!-- PAGE {page_idx} -->\n\n{text.strip()}")
+            markdown = "\n\n".join(page_markdowns)
 
         if not markdown.strip():
             raise ExtractorError(

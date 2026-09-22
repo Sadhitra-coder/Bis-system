@@ -19,6 +19,11 @@ data/vector_db.*/
 data/knowledge.*/
 data/chunks/
 data/raw/uploads/
+data/cleaned/
+data/markdown/
+data/normalized/
+data/structured/
+data/chroma_db/
 *.backup*
 *.preflight-backup*
 

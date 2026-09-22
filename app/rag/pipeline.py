@@ -772,7 +772,7 @@ class RAGPipeline:
                     clauses = self.knowledge_repo.get_standard_clauses(cand.standard_id)
                     for cl in clauses:
                         if cl.clause_number in ("1", "1.1") or "scope" in (cl.clause_title or "").lower():
-                            scope_text = cl.clause_text
+                            scope_text = getattr(cl, "clause_text", None) or getattr(cl, "heading_path", None) or getattr(cl, "clause_title", None)
                             break
 
                 assessment = evaluate_standard_applicability(
@@ -841,7 +841,11 @@ class RAGPipeline:
                     grounding = repaired_grounding
                 else:
                     logger.warning("Repaired generation still contains unsupported claims. Enforcing verification_required.")
-                    answer = repaired_answer
+                    answer = (
+                        f"Verification Required: The generated response contains ungrounded claims that could not be verified "
+                        f"against authoritative BIS standard text ({repaired_grounding.reason or 'evidence mismatch'}). "
+                        f"Manual regulatory verification is required."
+                    )
                     grounding = repaired_grounding
         else:
             if query_context.intent.intent == QueryIntentType.APPLICABILITY_QUERY:

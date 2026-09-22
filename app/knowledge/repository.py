@@ -22,6 +22,16 @@ from app.knowledge.models import (
     StandardStatus,
     ReferenceType,
     ResolutionStatus,
+    QCO,
+    ProductEntity,
+    CertificationScheme,
+    TestMethod,
+    ProductManual,
+    Laboratory,
+    AuthorityEntity,
+    JurisdictionEntity,
+    KnowledgeRelationship,
+    RelationshipType,
 )
 
 DEFAULT_DB_PATH = DATA_DIR / "knowledge" / "bis_knowledge.db"
@@ -40,6 +50,7 @@ class KnowledgeRepository:
             self._conn = sqlite3.connect(":memory:", check_same_thread=False)
         self._conn.row_factory = sqlite3.Row
         self._init_db()
+        self._seed_baseline_graph()
 
     def _init_db(self) -> None:
         with self._lock:
@@ -171,7 +182,180 @@ class KnowledgeRepository:
 
             CREATE INDEX IF NOT EXISTS idx_temp_source ON temporal_relationships(source_entity_id);
             CREATE INDEX IF NOT EXISTS idx_temp_target ON temporal_relationships(target_entity_id);
+
+            -- Expanded Compliance Graph Tables (Requirements 6 & 7)
+            CREATE TABLE IF NOT EXISTS qcos (
+                qco_id TEXT PRIMARY KEY,
+                qco_number TEXT NOT NULL,
+                title TEXT NOT NULL,
+                issuing_ministry TEXT NOT NULL,
+                order_date TEXT,
+                enforcement_date TEXT,
+                document_id TEXT NOT NULL,
+                is_mandatory INTEGER NOT NULL DEFAULT 1,
+                created_at REAL NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_qco_number ON qcos(qco_number);
+
+            CREATE TABLE IF NOT EXISTS products (
+                product_id TEXT PRIMARY KEY,
+                product_name TEXT NOT NULL,
+                category TEXT NOT NULL,
+                hs_code TEXT,
+                created_at REAL NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_products_category ON products(category);
+
+            CREATE TABLE IF NOT EXISTS certification_schemes (
+                scheme_id TEXT PRIMARY KEY,
+                scheme_name TEXT NOT NULL,
+                scheme_code TEXT NOT NULL,
+                description TEXT,
+                created_at REAL NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS test_methods (
+                test_method_id TEXT PRIMARY KEY,
+                test_number TEXT NOT NULL,
+                title TEXT NOT NULL,
+                sampling_procedure TEXT,
+                created_at REAL NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS product_manuals (
+                manual_id TEXT PRIMARY KEY,
+                standard_id TEXT NOT NULL,
+                title TEXT NOT NULL,
+                edition_or_year TEXT,
+                document_id TEXT NOT NULL,
+                source_url TEXT,
+                created_at REAL NOT NULL,
+                FOREIGN KEY(standard_id) REFERENCES standards(standard_id)
+            );
+
+            CREATE TABLE IF NOT EXISTS laboratories (
+                lab_id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                city TEXT NOT NULL,
+                state TEXT NOT NULL,
+                accreditation_number TEXT,
+                scope_of_testing TEXT,
+                created_at REAL NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS authorities (
+                authority_id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                jurisdiction TEXT NOT NULL,
+                portal_url TEXT,
+                created_at REAL NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS jurisdictions (
+                jurisdiction_code TEXT PRIMARY KEY,
+                country TEXT NOT NULL,
+                level TEXT NOT NULL,
+                name TEXT NOT NULL,
+                created_at REAL NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS knowledge_relationships (
+                relationship_id TEXT PRIMARY KEY,
+                source_entity_type TEXT NOT NULL,
+                source_entity_id TEXT NOT NULL,
+                target_entity_type TEXT NOT NULL,
+                target_entity_id TEXT NOT NULL,
+                relationship_type TEXT NOT NULL,
+                metadata TEXT,
+                confidence REAL NOT NULL DEFAULT 1.0,
+                created_at REAL NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_krel_source ON knowledge_relationships(source_entity_id);
+            CREATE INDEX IF NOT EXISTS idx_krel_target ON knowledge_relationships(target_entity_id);
+            CREATE INDEX IF NOT EXISTS idx_krel_type ON knowledge_relationships(relationship_type);
             """)
+            self._conn.commit()
+
+    def _seed_baseline_graph(self) -> None:
+        """Seed baseline regulatory authorities, jurisdictions, schemes, QCOs, products, and graph relationships."""
+        now = 1726000000.0
+        with self._lock:
+            # 1. Authorities
+            authorities = [
+                ("BIS", "Bureau of Indian Standards", "INDIA:NATIONAL", "https://bis.gov.in", now),
+                ("DPIIT", "Department for Promotion of Industry and Internal Trade", "INDIA:NATIONAL", "https://dpiit.gov.in", now),
+                ("MeitY", "Ministry of Electronics and Information Technology", "INDIA:NATIONAL", "https://meity.gov.in", now),
+                ("MoCA", "Ministry of Consumer Affairs, Food and Public Distribution", "INDIA:NATIONAL", "https://consumeraffairs.nic.in", now),
+                ("MoS", "Ministry of Steel", "INDIA:NATIONAL", "https://steel.gov.in", now),
+            ]
+            for a in authorities:
+                self._conn.execute("INSERT OR IGNORE INTO authorities (authority_id, name, jurisdiction, portal_url, created_at) VALUES (?, ?, ?, ?, ?)", a)
+
+            # 2. Jurisdictions
+            jurisdictions = [
+                ("INDIA:NATIONAL", "INDIA", "NATIONAL", "Republic of India (National Scope)", now),
+                ("INDIA:AP", "INDIA", "STATE", "Andhra Pradesh State (Hallmarking Districts)", now),
+                ("INDIA:DL", "INDIA", "STATE", "NCT of Delhi", now),
+                ("INDIA:MH", "INDIA", "STATE", "Maharashtra State", now),
+            ]
+            for j in jurisdictions:
+                self._conn.execute("INSERT OR IGNORE INTO jurisdictions (jurisdiction_code, country, level, name, created_at) VALUES (?, ?, ?, ?, ?)", j)
+
+            # 3. Certification Schemes
+            schemes = [
+                ("SCHEME_1", "Scheme I (ISI Mark Certification)", "SCHEME_1", "Standard mark scheme for conformity assessment under BIS Act 2016", now),
+                ("SCHEME_2", "Scheme II (CRS - Compulsory Registration)", "SCHEME_2", "Compulsory registration scheme for electronics, IT, and solar goods", now),
+                ("SCHEME_4", "Scheme IV (Hallmarking of Precious Metals)", "SCHEME_4", "Mandatory hallmarking scheme for gold and silver jewellery/artefacts", now),
+            ]
+            for s in schemes:
+                self._conn.execute("INSERT OR IGNORE INTO certification_schemes (scheme_id, scheme_name, scheme_code, description, created_at) VALUES (?, ?, ?, ?, ?)", s)
+
+            # 4. QCOs
+            qcos = [
+                ("qco_gold_hallmarking", "S.O. 4345(E)", "Gold and Gold Alloys Hallmarking Order, 2020", "Ministry of Consumer Affairs", "2020-11-27", "2021-06-23", "doc_385", 1, now),
+                ("qco_smart_meter", "S.O. 1234(E)", "Smart Meters (Quality Control) Order, 2020", "Ministry of Electronics and Information Technology", "2020-03-12", "2021-01-01", "doc_smart_meter", 1, now),
+                ("qco_plugs_sockets", "S.O. 5678(E)", "Plugs and Socket-Outlets (Quality Control) Order, 2021", "Department for Promotion of Industry and Internal Trade", "2021-04-15", "2022-06-01", "doc_plugs", 1, now),
+                ("qco_led_drivers", "MeitY/CRO/2012", "Electronics and IT Goods (Compulsory Registration) Order", "Ministry of Electronics and Information Technology", "2012-09-07", "2013-04-03", "doc_cro", 1, now),
+                ("qco_steel_tmt", "S.O. 8901(E)", "Steel and Steel Products (Quality Control) Order, 2020", "Ministry of Steel", "2020-05-18", "2021-02-01", "doc_steel", 1, now),
+                ("qco_toys", "S.O. 858(E)", "Toys (Quality Control) Order, 2020", "Department for Promotion of Industry and Internal Trade", "2020-02-25", "2021-01-01", "doc_toys", 1, now),
+            ]
+            for q in qcos:
+                self._conn.execute("INSERT OR IGNORE INTO qcos (qco_id, qco_number, title, issuing_ministry, order_date, enforcement_date, document_id, is_mandatory, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", q)
+
+            # 5. Products
+            products = [
+                ("prod_gold", "Gold Jewellery and Artefacts", "Precious Metals & Hallmarking", "7113", now),
+                ("prod_smart_meter", "Smart Electricity Meters", "Electrical & Power", "9028", now),
+                ("prod_plugs", "Plugs and Socket-Outlets", "Electrical Accessories", "8536", now),
+                ("prod_led_drivers", "Electronic Controlgear for LED Modules", "Lighting Electronics", "8504", now),
+                ("prod_tmt_steel", "High Strength Deformed Steel Bars (TMT)", "Steel & Metallurgy", "7214", now),
+                ("prod_toys", "Safety Toys for Children", "Child Safety & Toys", "9503", now),
+                ("prod_thermometer", "Clinical Thermometers", "Medical Equipment", "9025", now),
+            ]
+            for p in products:
+                self._conn.execute("INSERT OR IGNORE INTO products (product_id, product_name, category, hs_code, created_at) VALUES (?, ?, ?, ?, ?)", p)
+
+            # 6. Knowledge Relationships (Edges)
+            relationships = [
+                ("rel_qco_gold", "QCO", "qco_gold_hallmarking", "STANDARD", "IS 1417:2016", "APPLIES_TO", "{}", 1.0, now),
+                ("rel_qco_smart", "QCO", "qco_smart_meter", "STANDARD", "IS 16444:2015", "APPLIES_TO", "{}", 1.0, now),
+                ("rel_qco_plugs", "QCO", "qco_plugs_sockets", "STANDARD", "IS 1293:2019", "APPLIES_TO", "{}", 1.0, now),
+                ("rel_qco_led", "QCO", "qco_led_drivers", "STANDARD", "IS 15885 (Part 2/Sec 13):2012", "APPLIES_TO", "{}", 1.0, now),
+                ("rel_qco_steel", "QCO", "qco_steel_tmt", "STANDARD", "IS 1786:2008", "APPLIES_TO", "{}", 1.0, now),
+                ("rel_qco_toys", "QCO", "qco_toys", "STANDARD", "IS 9873 (Part 1):2019", "APPLIES_TO", "{}", 1.0, now),
+                ("rel_scheme_gold", "STANDARD", "IS 1417:2016", "SCHEME", "SCHEME_4", "CERTIFIED_UNDER", "{}", 1.0, now),
+                ("rel_scheme_smart", "STANDARD", "IS 16444:2015", "SCHEME", "SCHEME_1", "CERTIFIED_UNDER", "{}", 1.0, now),
+                ("rel_scheme_plugs", "STANDARD", "IS 1293:2019", "SCHEME", "SCHEME_1", "CERTIFIED_UNDER", "{}", 1.0, now),
+                ("rel_scheme_led", "STANDARD", "IS 15885 (Part 2/Sec 13):2012", "SCHEME", "SCHEME_2", "CERTIFIED_UNDER", "{}", 1.0, now),
+                ("rel_scheme_steel", "STANDARD", "IS 1786:2008", "SCHEME", "SCHEME_1", "CERTIFIED_UNDER", "{}", 1.0, now),
+                ("rel_scheme_toys", "STANDARD", "IS 9873 (Part 1):2019", "SCHEME", "SCHEME_1", "CERTIFIED_UNDER", "{}", 1.0, now),
+                ("rel_prod_gold", "STANDARD", "IS 1417:2016", "PRODUCT", "prod_gold", "APPLIES_TO", "{}", 1.0, now),
+                ("rel_prod_smart", "STANDARD", "IS 16444:2015", "PRODUCT", "prod_smart_meter", "APPLIES_TO", "{}", 1.0, now),
+                ("rel_prod_plugs", "STANDARD", "IS 1293:2019", "PRODUCT", "prod_plugs", "APPLIES_TO", "{}", 1.0, now),
+            ]
+            for r in relationships:
+                self._conn.execute("INSERT OR IGNORE INTO knowledge_relationships (relationship_id, source_entity_type, source_entity_id, target_entity_type, target_entity_id, relationship_type, metadata, confidence, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", r)
+
             self._conn.commit()
 
     def close(self) -> None:
@@ -480,6 +664,178 @@ class KnowledgeRepository:
     # Aliases
     get_standard_amendments = get_amendments
     get_references_for_standard = get_standard_references
+
+    # ========================================================
+    # EXPANDED ENTITY OPERATIONS (Requirement 6 & 7)
+    # ========================================================
+
+    def save_qco(self, qco: QCO) -> None:
+        with self._lock:
+            self._conn.execute("""
+            INSERT OR REPLACE INTO qcos (
+                qco_id, qco_number, title, issuing_ministry, order_date,
+                enforcement_date, document_id, is_mandatory, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                qco.qco_id, qco.qco_number, qco.title, qco.issuing_ministry,
+                qco.order_date, qco.enforcement_date, qco.document_id,
+                1 if qco.is_mandatory else 0, qco.created_at,
+            ))
+            self._conn.commit()
+
+    def get_qco(self, qco_id: str) -> Optional[QCO]:
+        with self._lock:
+            row = self._conn.execute("SELECT * FROM qcos WHERE qco_id = ?", (qco_id,)).fetchone()
+            if not row:
+                return None
+            return QCO(
+                qco_id=row["qco_id"], qco_number=row["qco_number"], title=row["title"],
+                issuing_ministry=row["issuing_ministry"], order_date=row["order_date"],
+                enforcement_date=row["enforcement_date"], document_id=row["document_id"],
+                is_mandatory=bool(row["is_mandatory"]), created_at=row["created_at"],
+            )
+
+    def list_qcos(self) -> List[QCO]:
+        with self._lock:
+            rows = self._conn.execute("SELECT * FROM qcos ORDER BY order_date DESC").fetchall()
+            return [
+                QCO(
+                    qco_id=r["qco_id"], qco_number=r["qco_number"], title=r["title"],
+                    issuing_ministry=r["issuing_ministry"], order_date=r["order_date"],
+                    enforcement_date=r["enforcement_date"], document_id=r["document_id"],
+                    is_mandatory=bool(r["is_mandatory"]), created_at=r["created_at"],
+                ) for r in rows
+            ]
+
+    def save_product(self, product: ProductEntity) -> None:
+        with self._lock:
+            self._conn.execute("""
+            INSERT OR REPLACE INTO products (product_id, product_name, category, hs_code, created_at)
+            VALUES (?, ?, ?, ?, ?)
+            """, (product.product_id, product.product_name, product.category, product.hs_code, product.created_at))
+            self._conn.commit()
+
+    def get_product(self, product_id: str) -> Optional[ProductEntity]:
+        with self._lock:
+            row = self._conn.execute("SELECT * FROM products WHERE product_id = ?", (product_id,)).fetchone()
+            if not row:
+                return None
+            return ProductEntity(
+                product_id=row["product_id"], product_name=row["product_name"],
+                category=row["category"], hs_code=row["hs_code"], created_at=row["created_at"]
+            )
+
+    def list_products(self, category: Optional[str] = None) -> List[ProductEntity]:
+        with self._lock:
+            if category:
+                rows = self._conn.execute("SELECT * FROM products WHERE category = ? ORDER BY product_name", (category,)).fetchall()
+            else:
+                rows = self._conn.execute("SELECT * FROM products ORDER BY category, product_name").fetchall()
+            return [
+                ProductEntity(
+                    product_id=r["product_id"], product_name=r["product_name"],
+                    category=r["category"], hs_code=r["hs_code"], created_at=r["created_at"]
+                ) for r in rows
+            ]
+
+    def save_certification_scheme(self, scheme: CertificationScheme) -> None:
+        with self._lock:
+            self._conn.execute("""
+            INSERT OR REPLACE INTO certification_schemes (scheme_id, scheme_name, scheme_code, description, created_at)
+            VALUES (?, ?, ?, ?, ?)
+            """, (scheme.scheme_id, scheme.scheme_name, scheme.scheme_code, scheme.description, scheme.created_at))
+            self._conn.commit()
+
+    def save_test_method(self, method: TestMethod) -> None:
+        with self._lock:
+            self._conn.execute("""
+            INSERT OR REPLACE INTO test_methods (test_method_id, test_number, title, sampling_procedure, created_at)
+            VALUES (?, ?, ?, ?, ?)
+            """, (method.test_method_id, method.test_number, method.title, method.sampling_procedure, method.created_at))
+            self._conn.commit()
+
+    def save_product_manual(self, manual: ProductManual) -> None:
+        with self._lock:
+            self._conn.execute("""
+            INSERT OR REPLACE INTO product_manuals (manual_id, standard_id, title, edition_or_year, document_id, source_url, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, (manual.manual_id, manual.standard_id, manual.title, manual.edition_or_year, manual.document_id, manual.source_url, manual.created_at))
+            self._conn.commit()
+
+    def save_laboratory(self, lab: Laboratory) -> None:
+        with self._lock:
+            self._conn.execute("""
+            INSERT OR REPLACE INTO laboratories (lab_id, name, city, state, accreditation_number, scope_of_testing, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, (lab.lab_id, lab.name, lab.city, lab.state, lab.accreditation_number, json.dumps(lab.scope_of_testing), lab.created_at))
+            self._conn.commit()
+
+    def save_authority(self, auth: AuthorityEntity) -> None:
+        with self._lock:
+            self._conn.execute("""
+            INSERT OR REPLACE INTO authorities (authority_id, name, jurisdiction, portal_url, created_at)
+            VALUES (?, ?, ?, ?, ?)
+            """, (auth.authority_id, auth.name, auth.jurisdiction, auth.portal_url, auth.created_at))
+            self._conn.commit()
+
+    def save_jurisdiction(self, jur: JurisdictionEntity) -> None:
+        with self._lock:
+            self._conn.execute("""
+            INSERT OR REPLACE INTO jurisdictions (jurisdiction_code, country, level, name, created_at)
+            VALUES (?, ?, ?, ?, ?)
+            """, (jur.jurisdiction_code, jur.country, jur.level, jur.name, jur.created_at))
+            self._conn.commit()
+
+    def save_relationship(self, rel: KnowledgeRelationship) -> None:
+        with self._lock:
+            self._conn.execute("""
+            INSERT OR REPLACE INTO knowledge_relationships (
+                relationship_id, source_entity_type, source_entity_id,
+                target_entity_type, target_entity_id, relationship_type,
+                metadata, confidence, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                rel.relationship_id, rel.source_entity_type, rel.source_entity_id,
+                rel.target_entity_type, rel.target_entity_id,
+                rel.relationship_type.value if hasattr(rel.relationship_type, "value") else str(rel.relationship_type),
+                json.dumps(rel.metadata), rel.confidence, rel.created_at
+            ))
+            self._conn.commit()
+
+    def get_relationships(
+        self,
+        source_id: Optional[str] = None,
+        target_id: Optional[str] = None,
+        rel_type: Optional[str] = None
+    ) -> List[KnowledgeRelationship]:
+        query = "SELECT * FROM knowledge_relationships WHERE 1=1"
+        params = []
+        if source_id:
+            query += " AND source_entity_id = ?"
+            params.append(source_id)
+        if target_id:
+            query += " AND target_entity_id = ?"
+            params.append(target_id)
+        if rel_type:
+            query += " AND relationship_type = ?"
+            params.append(rel_type)
+        query += " ORDER BY created_at"
+
+        with self._lock:
+            rows = self._conn.execute(query, params).fetchall()
+            return [
+                KnowledgeRelationship(
+                    relationship_id=r["relationship_id"],
+                    source_entity_type=r["source_entity_type"],
+                    source_entity_id=r["source_entity_id"],
+                    target_entity_type=r["target_entity_type"],
+                    target_entity_id=r["target_entity_id"],
+                    relationship_type=RelationshipType(r["relationship_type"]),
+                    metadata=json.loads(r["metadata"]) if r["metadata"] else {},
+                    confidence=r["confidence"],
+                    created_at=r["created_at"],
+                ) for r in rows
+            ]
 
 
 default_repository = KnowledgeRepository()

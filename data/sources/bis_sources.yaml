@@ -1,0 +1,152 @@
+# Official BIS Source Registry
+# Machine-readable registry of verified government and regulatory endpoints for the BIS Intelligence Engine.
+
+sources:
+  - source_id: bis_main_portal
+    organization: Bureau of Indian Standards
+    canonical_url: https://www.bis.gov.in
+    source_type: OFFICIAL_PORTAL
+    jurisdiction: INDIA:NATIONAL
+    document_types:
+      - GENERAL_INFORMATION
+      - ORGANIZATIONAL_STRUCTURE
+      - ANNUAL_REPORT
+    discovery_method: HTML_LINK_CRAWL
+    crawl_frequency: WEEKLY
+    authority_level: STATUTORY_NATIONAL
+    access_policy: PUBLIC
+    rights_policy: PUBLIC
+    domain_allowlist:
+      - www.bis.gov.in
+      - bis.gov.in
+    enabled: true
+
+  - source_id: bis_know_your_standards_api
+    organization: Bureau of Indian Standards - BIS Connect
+    canonical_url: https://www.services.bis.gov.in/php/BIS_2.0/bisconnect/knowyourstandards/indian_standards/isdetails
+    search_endpoint: https://www.services.bis.gov.in/php/BIS_2.0/bisconnect/knowyourstandards/Elasticsearch/getsearchAjax
+    source_type: REGULATOR_PORTAL
+    jurisdiction: INDIA:NATIONAL
+    document_types:
+      - STANDARD_METADATA
+      - AMENDMENT_METADATA
+      - COMMITTEE_INFO
+    discovery_method: ELASTICSEARCH_POST_API
+    crawl_frequency: DAILY
+    authority_level: STATUTORY_NATIONAL
+    access_policy: PUBLIC
+    rights_policy: PUBLIC
+    domain_allowlist:
+      - www.services.bis.gov.in
+    enabled: true
+
+  - source_id: bis_product_specific_guidelines
+    organization: Bureau of Indian Standards - Product Certification
+    canonical_url: https://www.bis.gov.in/product-certification/product-specific-guidelines/
+    source_type: OFFICIAL_PORTAL
+    jurisdiction: INDIA:NATIONAL
+    document_types:
+      - PRODUCT_MANUAL
+      - SCHEME_OF_TESTING_AND_INSPECTION
+      - CERTIFICATION_GUIDANCE
+    discovery_method: TABLE_PARSING
+    crawl_frequency: WEEKLY
+    authority_level: STATUTORY_NATIONAL
+    access_policy: PUBLIC
+    rights_policy: PUBLIC
+    domain_allowlist:
+      - www.bis.gov.in
+      - bis.gov.in
+    enabled: true
+
+  - source_id: bis_compulsory_certification_products
+    organization: Bureau of Indian Standards - Conformity Assessment
+    canonical_url: https://www.bis.gov.in/product-certification/products-under-compulsory-certification/
+    source_type: OFFICIAL_PORTAL
+    jurisdiction: INDIA:NATIONAL
+    document_types:
+      - MANDATORY_PRODUCT_LIST
+      - SCHEME_MAPPING
+      - QCO_REFERENCE
+    discovery_method: TABLE_PARSING
+    crawl_frequency: WEEKLY
+    authority_level: STATUTORY_NATIONAL
+    access_policy: PUBLIC
+    rights_policy: PUBLIC
+    domain_allowlist:
+      - www.bis.gov.in
+      - bis.gov.in
+    enabled: true
+
+  - source_id: bis_standards_publishing_portal
+    organization: Bureau of Indian Standards - Standards Portal
+    canonical_url: https://standardsbis.bsbedge.com
+    search_endpoint: https://standardsbis.bsbedge.com/BIS_SearchStandard.aspx
+    source_type: STANDARDS_BODY
+    jurisdiction: INDIA:NATIONAL
+    document_types:
+      - STANDARD
+      - AMENDMENT
+    discovery_method: HTTP_SEARCH
+    crawl_frequency: WEEKLY
+    authority_level: STATUTORY_NATIONAL
+    access_policy: LICENSE_REQUIRED
+    rights_policy: LICENSED
+    domain_allowlist:
+      - standardsbis.bsbedge.com
+    enabled: true
+
+  - source_id: bis_manakonline_portal
+    organization: Bureau of Indian Standards - e-BIS Manakonline
+    canonical_url: https://www.manakonline.in/MANAK/home
+    source_type: OFFICIAL_PORTAL
+    jurisdiction: INDIA:NATIONAL
+    document_types:
+      - APPLICATION_GUIDELINES
+      - LAB_DIRECTORY
+      - SURVEILLANCE_PROCEDURES
+    discovery_method: HTML_LINK_CRAWL
+    crawl_frequency: WEEKLY
+    authority_level: STATUTORY_NATIONAL
+    access_policy: PUBLIC
+    rights_policy: PUBLIC
+    domain_allowlist:
+      - www.manakonline.in
+      - cuid.manakonline.in
+      - huid.manakonline.in
+    enabled: true
+
+  - source_id: dpiit_qco_repository
+    organization: Department for Promotion of Industry and Internal Trade (DPIIT)
+    canonical_url: https://dpiit.gov.in/quality-control-orders
+    source_type: MINISTRY_PORTAL
+    jurisdiction: INDIA:NATIONAL
+    document_types:
+      - QCO
+      - QCO_AMENDMENT
+      - ENFORCEMENT_EXTENSION
+    discovery_method: TABLE_PARSING
+    crawl_frequency: WEEKLY
+    authority_level: CENTRAL_MINISTRY
+    access_policy: PUBLIC
+    rights_policy: PUBLIC
+    domain_allowlist:
+      - dpiit.gov.in
+    enabled: true
+
+  - source_id: egazette_india_notifications
+    organization: Directorate of Printing - Gazette of India
+    canonical_url: https://egazette.gov.in
+    source_type: GAZETTE
+    jurisdiction: INDIA:NATIONAL
+    document_types:
+      - GAZETTE_NOTIFICATION
+      - STATUTORY_ORDER
+    discovery_method: GAZETTE_SEARCH
+    crawl_frequency: DAILY
+    authority_level: CENTRAL_MINISTRY
+    access_policy: PUBLIC
+    rights_policy: PUBLIC
+    domain_allowlist:
+      - egazette.gov.in
+    enabled: true

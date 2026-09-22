@@ -129,7 +129,10 @@ def query_documents(payload: QueryRequest, request: Request):
                 **kwargs,
             )
 
+        cid = payload.correlation_id or getattr(request.state, "correlation_id", None)
         return QueryResponse(
+            query_id=result.get("query_id"),
+            correlation_id=cid,
             query=result.get("query", payload.query),
             answer=result["answer"],
             sources=result["sources"],
