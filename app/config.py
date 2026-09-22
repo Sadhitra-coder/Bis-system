@@ -26,8 +26,8 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 MODEL_CACHE_DIR = BASE_DIR / "model_cache"
 if MODEL_CACHE_DIR.exists():
     os.environ.setdefault("HF_HOME", str(MODEL_CACHE_DIR))
-    os.environ.setdefault("TRANSFORMERS_CACHE", str(MODEL_CACHE_DIR))
-    os.environ.setdefault("SENTENCE_TRANSFORMERS_HOME", str(MODEL_CACHE_DIR))
+    os.environ.setdefault("TRANSFORMERS_CACHE", str(MODEL_CACHE_DIR / "hub"))
+    os.environ.setdefault("SENTENCE_TRANSFORMERS_HOME", str(MODEL_CACHE_DIR / "hub"))
     os.environ.setdefault("TORCH_HOME", str(MODEL_CACHE_DIR))
     os.environ.setdefault("TRANSFORMERS_NO_TF", "1")
     os.environ.setdefault("USE_TF", "0")

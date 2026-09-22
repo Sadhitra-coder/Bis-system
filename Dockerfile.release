@@ -4,8 +4,8 @@ WORKDIR /app
 
 # Intentional offline model cache configuration (eliminates ENOSPC and runtime downloads)
 ENV HF_HOME=/app/model_cache
-ENV TRANSFORMERS_CACHE=/app/model_cache
-ENV SENTENCE_TRANSFORMERS_HOME=/app/model_cache
+ENV TRANSFORMERS_CACHE=/app/model_cache/hub
+ENV SENTENCE_TRANSFORMERS_HOME=/app/model_cache/hub
 ENV TORCH_HOME=/app/model_cache
 ENV HF_HUB_OFFLINE=1
 ENV TRANSFORMERS_OFFLINE=1
