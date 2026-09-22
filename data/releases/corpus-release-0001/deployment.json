@@ -1,6 +1,6 @@
 {
   "release_id": "corpus-release-0001",
-  "timestamp": "2026-09-22T16:45:11.811979+00:00",
+  "timestamp": "2026-09-22T16:57:43.575732+00:00",
   "dry_run": false,
   "steps": {
     "manifest_verification": {
@@ -41,7 +41,7 @@
     },
     "docker_build": {
       "status": "SUCCESS",
-      "tag": "complywiseacr.azurecr.io/bis-system-v5:corpus-release-0001-b508c7b8e2"
+      "tag": "complywiseacr.azurecr.io/bis-system-v5:corpus-release-0001-551bb8dd83"
     },
     "docker_push": {
       "status": "SUCCESS"
@@ -51,9 +51,9 @@
       "provisioning_state": "Succeeded",
       "fqdn": "bis-system-v5.bravesand-4d6fbaeb.eastasia.azurecontainerapps.io",
       "latest_revision": "bis-system-v5--latest",
-      "image_digest": "sha256:2070eea60bf705f3632a3743050faeb72d3e0f42a68b0fa82a6df04c9286d53b"
+      "image_digest": "sha256:74d1580ef71b97729c67a85c2fe62854bf9d2d46fe65bf6d80167274cfb81011"
     }
   },
   "status": "COMPLETED",
-  "image_tag": "complywiseacr.azurecr.io/bis-system-v5:corpus-release-0001-b508c7b8e2"
+  "image_tag": "complywiseacr.azurecr.io/bis-system-v5:corpus-release-0001-551bb8dd83"
 }

@@ -2,7 +2,17 @@ FROM complywiseacr.azurecr.io/bis-system-v5:984a5a4
 
 WORKDIR /app
 
-# Copy updated knowledge base, routes, release manifest, and playground
+# Intentional offline model cache configuration (eliminates ENOSPC and runtime downloads)
+ENV HF_HOME=/app/model_cache
+ENV TRANSFORMERS_CACHE=/app/model_cache
+ENV SENTENCE_TRANSFORMERS_HOME=/app/model_cache
+ENV TORCH_HOME=/app/model_cache
+ENV HF_HUB_OFFLINE=1
+ENV TRANSFORMERS_OFFLINE=1
+ENV TRANSFORMERS_NO_TF=1
+ENV USE_TF=0
+
+# Copy application code, knowledge databases, ChromaDB vectors, and pre-baked model cache
 COPY . .
 
 ENV PORT=8001

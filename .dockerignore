@@ -6,6 +6,8 @@
 __pycache__/
 *.py[cod]
 *$py.class
+.pytest_cache/
+.coverage
 .venv/
 venv/
 env/
@@ -28,6 +30,7 @@ tests/
 docs/
 *.md
 
-# Keep data/knowledge and data/vector_db explicitly
+# Keep data/knowledge, data/vector_db, and pre-baked model_cache explicitly
 !data/knowledge/bis_knowledge.db
 !data/vector_db/**
+!model_cache/**

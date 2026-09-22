@@ -12,6 +12,7 @@ Import `settings` instead.
 from pathlib import Path
 from typing import Optional
 
+import os
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -20,6 +21,18 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 # ============================================================
 
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+# Intentional Offline Model Cache (prevents runtime downloads and ENOSPC)
+MODEL_CACHE_DIR = BASE_DIR / "model_cache"
+if MODEL_CACHE_DIR.exists():
+    os.environ.setdefault("HF_HOME", str(MODEL_CACHE_DIR))
+    os.environ.setdefault("TRANSFORMERS_CACHE", str(MODEL_CACHE_DIR))
+    os.environ.setdefault("SENTENCE_TRANSFORMERS_HOME", str(MODEL_CACHE_DIR))
+    os.environ.setdefault("TORCH_HOME", str(MODEL_CACHE_DIR))
+    os.environ.setdefault("TRANSFORMERS_NO_TF", "1")
+    os.environ.setdefault("USE_TF", "0")
+    os.environ.setdefault("HF_HUB_OFFLINE", "1")
+    os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
 
 DATA_DIR = BASE_DIR / "data"
 

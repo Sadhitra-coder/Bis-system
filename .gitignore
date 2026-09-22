@@ -27,5 +27,8 @@ data/chroma_db/
 *.backup*
 *.preflight-backup*
 
-# Temporary scratch
+# Temporary scratch and cache
 scratch/
+model_cache/
+.pytest_cache/
+.coverage
