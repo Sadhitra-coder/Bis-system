@@ -772,7 +772,7 @@ class RAGPipeline:
                     clauses = self.knowledge_repo.get_standard_clauses(cand.standard_id)
                     for cl in clauses:
                         if cl.clause_number in ("1", "1.1") or "scope" in (cl.clause_title or "").lower():
-                            scope_text = cl.clause_text
+                            scope_text = getattr(cl, "clause_text", None) or getattr(cl, "heading_path", None) or getattr(cl, "clause_title", None)
                             break
 
                 assessment = evaluate_standard_applicability(
