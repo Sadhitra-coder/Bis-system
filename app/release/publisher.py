@@ -124,13 +124,14 @@ def publish_release(
     # Step 4: Build Container Image
     if not skip_build:
         logger.info("[Step 3/6] Building Docker Container: %s", image_tag)
-        build_cmd = [
-            "docker", "build",
-            "--platform", "linux/amd64",
-            "-t", image_tag,
-            str(repo_root)
-        ]
-        b_res = _run_cmd(build_cmd, cwd=repo_root, timeout=1800)
+        dockerfile_path = repo_root / "Dockerfile.release"
+        build_cmd = ["docker", "build"]
+        if dockerfile_path.exists():
+            build_cmd.extend(["-f", str(dockerfile_path)])
+        else:
+            build_cmd.extend(["--platform", "linux/amd64"])
+        build_cmd.extend(["-t", image_tag, str(repo_root)])
+        b_res = _run_cmd(build_cmd, cwd=repo_root, timeout=600)
         if b_res.returncode != 0:
             raise RuntimeError(f"Docker build failed: {b_res.stderr}")
         report["steps"]["docker_build"] = {"status": "SUCCESS", "tag": image_tag}

@@ -31,12 +31,20 @@ async def lifespan(app: FastAPI):
 
     # 1. Load embedder and vector store collection
     logger.info("Initializing embedding model...")
-    embedder = load_embedding_model()
-    app.state.embedder = embedder
+    try:
+        embedder = load_embedding_model()
+        app.state.embedder = embedder
+    except Exception as e:
+        logger.warning("Could not initialize embedding model at startup: %s", e)
+        app.state.embedder = None
 
     logger.info("Initializing ChromaDB collection...")
-    collection = get_collection()
-    app.state.collection = collection
+    try:
+        collection = get_collection()
+        app.state.collection = collection
+    except Exception as e:
+        logger.warning("Could not initialize Chroma collection at startup: %s", e)
+        app.state.collection = None
 
     # 2. Load reranker
     logger.info("Initializing reranker...")
@@ -60,13 +68,15 @@ async def lifespan(app: FastAPI):
         app.state.generator = None
 
     # 4. Inspect the persisted index, then initialize the RAG pipeline.
-    #
-    # Readiness is decided by what the index actually CONTAINS, not by
-    # whether it contains anything. A non-empty collection full of
-    # superseded metadata used to pass `count() > 0` while every
-    # metadata-dependent feature was silently inert.
     try:
-        report = check_index_integrity(collection)
+        if collection is not None:
+            report = check_index_integrity(collection)
+        else:
+            report = IndexIntegrityReport(
+                state=INDEX_UNAVAILABLE,
+                message="ChromaDB collection was not loaded at startup.",
+                remediation="Inspect ChromaDB path and collection initialization.",
+            )
     except Exception as e:
         logger.warning("Index integrity check failed to run: %s", e)
         report = IndexIntegrityReport(
@@ -78,7 +88,7 @@ async def lifespan(app: FastAPI):
     app.state.index_integrity = report
 
     try:
-        if report.is_retrievable:
+        if report.is_retrievable and app.state.embedder is not None:
             # A stale or partly-invalid index is still wired up: refusing to
             # serve would turn degraded provenance into a total outage, and
             # /health already reports the truth about it.
@@ -100,7 +110,7 @@ async def lifespan(app: FastAPI):
             logger.info("RAGPipeline initialized and ready on startup.")
         else:
             logger.info(
-                "Index state %s; pipeline will initialize upon ingestion.",
+                "Index state %s or embedder not yet ready; pipeline will initialize upon first query/ingestion.",
                 report.state,
             )
             app.state.rag_pipeline = None

@@ -1,0 +1,59 @@
+{
+  "release_id": "corpus-release-0001",
+  "timestamp": "2026-09-22T16:45:11.811979+00:00",
+  "dry_run": false,
+  "steps": {
+    "manifest_verification": {
+      "status": "PASSED",
+      "metrics": {
+        "standards_count": 3,
+        "standard_versions_count": 3,
+        "standard_parts_count": 1,
+        "clauses_count": 69,
+        "amendments_count": 0,
+        "standard_references_count": 15,
+        "temporal_relationships_count": 0,
+        "source_registry_count": 29,
+        "document_rights_ledger_count": 8,
+        "discovered_items_count": 0,
+        "standards_metadata_catalog_count": 25,
+        "qcos_count": 23,
+        "products_count": 27,
+        "certification_schemes_count": 8,
+        "test_methods_count": 6,
+        "product_manuals_count": 9,
+        "laboratories_count": 5,
+        "authorities_count": 5,
+        "jurisdictions_count": 4,
+        "knowledge_relationships_count": 81,
+        "sync_history_count": 0,
+        "discovered_documents_count": 188,
+        "acquisition_audit_log_count": 13,
+        "acquisition_jobs_count": 6,
+        "indexed_chunks_count": 193,
+        "downloaded_documents_count": 10
+      }
+    },
+    "index_integrity": {
+      "status": "PASSED",
+      "state": "INDEX_READY",
+      "chunks_indexed": 193
+    },
+    "docker_build": {
+      "status": "SUCCESS",
+      "tag": "complywiseacr.azurecr.io/bis-system-v5:corpus-release-0001-b508c7b8e2"
+    },
+    "docker_push": {
+      "status": "SUCCESS"
+    },
+    "azure_deployment": {
+      "status": "SUCCESS",
+      "provisioning_state": "Succeeded",
+      "fqdn": "bis-system-v5.bravesand-4d6fbaeb.eastasia.azurecontainerapps.io",
+      "latest_revision": "bis-system-v5--latest",
+      "image_digest": "sha256:2070eea60bf705f3632a3743050faeb72d3e0f42a68b0fa82a6df04c9286d53b"
+    }
+  },
+  "status": "COMPLETED",
+  "image_tag": "complywiseacr.azurecr.io/bis-system-v5:corpus-release-0001-b508c7b8e2"
+}

@@ -192,9 +192,21 @@ async def execute_playground_query(payload: PlaygroundQueryRequest, request: Req
         from app.rag.pipeline import RAGPipeline
         from app.rag.retriever import HybridRetriever
         try:
+            embedder = getattr(request.app.state, "embedder", None)
+            if not embedder:
+                from app.steps.embed import load_embedding_model
+                embedder = load_embedding_model()
+                request.app.state.embedder = embedder
+
+            collection = getattr(request.app.state, "collection", None)
+            if not collection:
+                from app.steps.embed import get_collection
+                collection = get_collection()
+                request.app.state.collection = collection
+
             retriever = HybridRetriever(
-                embedder=getattr(request.app.state, "embedder", None),
-                collection=getattr(request.app.state, "collection", None)
+                embedder=embedder,
+                collection=collection
             )
             rag_pipeline = RAGPipeline(
                 retriever=retriever,
