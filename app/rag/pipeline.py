@@ -17,7 +17,7 @@ silently hijacks the host application's logging setup.
 
 import logging
 import re
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import time
 from app.config import settings
@@ -314,6 +314,102 @@ class RAGPipeline:
             "candidate_standards": [],
         }
 
+
+    def _build_extractive_answer(
+        self,
+        query: str,
+        evidence_items: List[EvidenceItem],
+        confidence: Any,
+        query_context: Any = None,
+        candidate_standards: Optional[List[Dict[str, Any]]] = None,
+        product_context: Optional[Any] = None,
+    ) -> Tuple[str, List[Dict[str, Any]]]:
+        """
+        Synthesizes a rich, structured compliance answer directly from the
+        authoritative retrieved BIS evidence passages when an external LLM
+        generator is not active.
+        """
+        if not evidence_items:
+            empty_ans = (
+                f"### ⚠️ No Direct Regulatory Provisions Found\n\n"
+                f"No matching clauses or requirements were found in the current BIS corpus for: *\"{query}\"*. "
+                f"Please verify against authoritative BIS standards publications."
+            )
+            return empty_ans, []
+
+        top_item = evidence_items[0]
+        std_num = top_item.standard_number or "Official Indian Standard"
+        std_title = top_item.standard_title or ""
+
+        # Deduplicate evidence chunks by content_hash / chunk_id
+        seen_hashes = set()
+        unique_items: List[EvidenceItem] = []
+        for it in evidence_items:
+            h = it.content_hash or it.chunk_id
+            if h not in seen_hashes:
+                seen_hashes.add(h)
+                unique_items.append(it)
+
+        parts: List[str] = []
+        raw_claims: List[Dict[str, Any]] = []
+
+        is_verification_req = getattr(confidence, "verification_required", False)
+        decision_val = getattr(confidence.decision, "value", str(confidence.decision))
+
+        if is_verification_req or decision_val == "verification_required":
+            reason = getattr(confidence, "verification_reason", None) or "Evidence requires regulatory cross-reference."
+            parts.append(f"### ⚠️ Verification Required\n\n**Notice:** {reason}\n")
+            parts.append("The specific standard or clause could not be definitively verified in the active index. However, the following related provisions and context were retrieved from the BIS corpus:\n")
+        elif decision_val == "qualified_answer":
+            parts.append(f"### Qualified Regulatory Findings: **{std_num}**\n")
+            if std_title:
+                parts.append(f"*{std_title}*\n")
+            parts.append("The following provisions were retrieved with moderate confidence from official BIS documentation:\n")
+        else:
+            parts.append(f"### Official Requirements & Regulatory Findings: **{std_num}**\n")
+            if std_title:
+                parts.append(f"*{std_title}*\n")
+            parts.append("The following mandatory technical specifications, test procedures, and compliance mandates were extracted directly from the authoritative BIS standard:\n")
+
+        # Extract requirements and assemble claims
+        for idx, item in enumerate(unique_items[:4], start=1):
+            ev_id = f"EV{idx}"
+            clause_heading = item.clause_title or (f"Clause {item.clause_id}" if item.clause_id else f"Requirement Section {idx}")
+            page_info = f" (Page {item.page_start})" if item.page_start else ""
+            clean_content = (item.source_content or item.content or "").strip()
+
+            # Clean content lines
+            lines = [l.strip() for l in clean_content.splitlines() if l.strip()]
+            display_text = "\n".join(lines[:14])
+            if len(lines) > 14:
+                display_text += "\n*(additional clauses and test tables in source document)*"
+
+            parts.append(f"#### {idx}. {clause_heading}{page_info} [{ev_id}]\n")
+            parts.append(f"{display_text}\n")
+
+            # Formulate claim for GroundingValidator
+            first_sentence = lines[0] if lines else clause_heading
+            if len(first_sentence) > 200:
+                first_sentence = first_sentence[:200]
+            raw_claims.append({
+                "claim_id": f"C{idx}",
+                "text": first_sentence,
+                "claim_type": "fact",
+                "citation_ids": [ev_id],
+            })
+
+        # Add Compliance Summary Footer
+        conf_pct = round(getattr(confidence, "score", 0.0) * 100, 1)
+        level_val = getattr(confidence.level, "value", str(confidence.level))
+        parts.append(
+            f"---\n"
+            f"**Compliance Summary:** Standard: `{std_num}` | "
+            f"Decision: `{decision_val}` | "
+            f"Confidence: `{conf_pct}% ({level_val})` | "
+            f"Authority: `Bureau of Indian Standards (BIS)`"
+        )
+
+        return "\n\n".join(parts), raw_claims
 
     # ========================================================
     # QUERY PIPELINE
@@ -863,6 +959,7 @@ class RAGPipeline:
                         f"Verification Required: No candidate standard was identified for {target_p} in the current corpus. "
                         f"Please verify against authoritative BIS publications."
                     )
+                raw_claims = []
             elif query_context.intent.intent == QueryIntentType.STANDARD_DISCOVERY:
                 target_p = product_context_obj.primary_identifier if product_context_obj else 'the specified product'
                 if candidate_standards_list:
@@ -876,30 +973,25 @@ class RAGPipeline:
                         f"Verification Required: No candidate standards found in the ingested corpus for {target_p}. "
                         f"Please verify against authoritative Indian Standard publications."
                     )
-            elif confidence.decision == Decision.VERIFICATION_REQUIRED:
-                answer = (
-                    f"Verification Required: {confidence.verification_reason or 'Available evidence is insufficient.'} "
-                    f"Retrieved {len(reranked_results)} relevant context passage(s)."
-                )
-            elif confidence.decision == Decision.QUALIFIED_ANSWER:
-                answer = (
-                    f"Qualified Answer (LLM generation disabled): "
-                    f"Retrieved {len(reranked_results)} relevant context passage(s) with moderate confidence. "
-                    f"Please review citations for exact requirements."
-                )
+                raw_claims = []
             else:
-                answer = (
-                    "LLM generation is disabled (GROQ_API_KEY is not set). "
-                    f"Retrieved {len(reranked_results)} relevant context passage(s)."
+                answer, raw_claims = self._build_extractive_answer(
+                    query=query,
+                    evidence_items=evidence_items,
+                    confidence=confidence,
+                    query_context=query_context,
+                    candidate_standards=candidate_standards_list,
+                    product_context=product_context_obj,
                 )
+
             generation_result = {
                 "answer": answer,
-                "model": "retrieval-only",
+                "model": "extractive-grounded-synthesis",
             }
             grounding = GroundingValidator.validate(
                 answer=answer,
                 evidence_items=evidence_items,
-                raw_claims=[],
+                raw_claims=raw_claims,
             )
 
         # ====================================================

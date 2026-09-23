@@ -203,8 +203,15 @@ class EvidenceEvaluator:
         cand_cls = (top_item.clause_id or "").strip()
         cand_amd = (top_item.amendment_number or "").strip()
 
-        exact_std_match = bool(has_std_query and cand_std == req_std)
-        standard_conflict = bool(has_std_query and cand_std and cand_std != req_std)
+        def _match_std(cand: str, req: str) -> bool:
+            if not cand or not req:
+                return False
+            c = cand.replace("-", " ").replace(":", " ").strip().upper()
+            r = req.replace("-", " ").replace(":", " ").strip().upper()
+            return c == r or c.startswith(r) or r.startswith(c)
+
+        exact_std_match = bool(has_std_query and _match_std(cand_std, req_std))
+        standard_conflict = bool(has_std_query and cand_std and not _match_std(cand_std, req_std))
         exact_cls_match = bool(has_cls_query and cand_cls == req_cls)
         exact_amd_match = bool(has_amd_query and cand_amd == req_amd)
         exact_ver_match = bool(has_ver_query and top_item.standard_year == entities.standard_year)
@@ -213,7 +220,8 @@ class EvidenceEvaluator:
         pool_matches_std = False
         if has_std_query:
             for item in unique_evidence:
-                if (item.standard_number or "").strip().upper() == req_std:
+                item_std = (item.standard_number or "").strip().upper()
+                if _match_std(item_std, req_std):
                     pool_matches_std = True
                     break
 

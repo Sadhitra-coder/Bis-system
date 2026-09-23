@@ -261,7 +261,8 @@ class GroundingValidator:
         if std_matches:
             for std_num in std_matches:
                 matching_ev = any(
-                    ev.standard_number and std_num in ev.standard_number
+                    (ev.standard_number and std_num in ev.standard_number)
+                    or (f"IS {std_num}" in (ev.source_content or ev.content))
                     for ev in unique_citations
                 )
                 if not matching_ev:
