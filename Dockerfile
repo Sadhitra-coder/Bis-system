@@ -15,6 +15,16 @@ COPY . .
 
 ENV PORT=8001
 ENV HOST=0.0.0.0
+ENV HF_HOME=/app/model_cache
+ENV TRANSFORMERS_CACHE=/app/model_cache/hub
+ENV SENTENCE_TRANSFORMERS_HOME=/app/model_cache/hub
+ENV TORCH_HOME=/app/model_cache
+ENV HF_HUB_OFFLINE=1
+ENV TRANSFORMERS_OFFLINE=1
+ENV TRANSFORMERS_NO_TF=1
+ENV USE_TF=0
+ENV TMPDIR=/app/data/tmp
+
 EXPOSE 8001
 
 CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8001}"]

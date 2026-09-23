@@ -50,6 +50,10 @@ VECTOR_DB_DIR = DATA_DIR / "vector_db"
 # Uploaded files land in data/raw/uploads/
 UPLOAD_DIR = RAW_DATA_DIR / "uploads"
 
+# Temporary working directory for SQLite/tempfile operations
+TMP_DATA_DIR = DATA_DIR / "tmp"
+os.environ.setdefault("TMPDIR", str(TMP_DATA_DIR))
+
 # Ingestion registry tracking file hashes and status
 REGISTRY_FILE = DATA_DIR / "ingestion_registry.json"
 
@@ -63,6 +67,7 @@ ALL_DATA_DIRS = (
     CHUNKS_DATA_DIR,
     VECTOR_DB_DIR,
     UPLOAD_DIR,
+    TMP_DATA_DIR,
 )
 
 
