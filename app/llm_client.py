@@ -353,6 +353,3 @@ class OpenAIClient:
             f"OpenAI {description} failed after {total_attempts} attempts: {last_error}"
         ) from last_error
 
-
-# Backwards compatibility alias for existing callers
-GroqClient = OpenAIClient

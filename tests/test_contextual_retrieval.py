@@ -188,7 +188,7 @@ def test_malformed_context_fallback():
     # Mock LLM client returning contradictory standard.
     #
     # NOTE ON THE METHOD NAME: this previously stubbed `.generate`, a method
-    # GroqClient does not have. MagicMock answers any attribute, so the test
+    # OpenAIClient does not have. MagicMock answers any attribute, so the test
     # passed while production raised AttributeError on every real call. The
     # stub must match the real client contract — `chat_completion` — or the
     # test proves nothing about the code that actually runs.
@@ -225,7 +225,7 @@ def test_malformed_context_fallback():
 #     (Phase 6 section 19)
 # ===========================================================
 
-class StrictGroqClientStub:
+class StrictOpenAIClientStub:
     """
     A stand-in for OpenAIClient that exposes ONLY the real interface.
 
@@ -279,7 +279,7 @@ def test_llm_contextualization_calls_the_real_client_method(monkeypatch):
     the old code could not satisfy.
     """
     _llm_enabled(monkeypatch)
-    client = StrictGroqClientStub("Sets permissible error limits for thermometers.")
+    client = StrictOpenAIClientStub("Sets permissible error limits for thermometers.")
 
     meta = {
         "chunk_id": "c_llm_ok",
@@ -306,7 +306,7 @@ def test_llm_prompt_is_a_two_turn_chat_with_bounded_input(monkeypatch):
     _llm_enabled(monkeypatch)
     from app.config import settings
 
-    client = StrictGroqClientStub()
+    client = StrictOpenAIClientStub()
     long_body = "x" * (settings.LLM_CONTEXT_INPUT_CHARS + 5000)
     contextualize_chunk(
         {
@@ -340,7 +340,7 @@ def test_llm_prompt_never_asserts_an_unknown_standard(monkeypatch):
     Standard Unknown Standard".
     """
     _llm_enabled(monkeypatch)
-    client = StrictGroqClientStub()
+    client = StrictOpenAIClientStub()
     contextualize_chunk(
         {
             "chunk_id": "c_llm_bare",
@@ -392,7 +392,7 @@ def test_llm_empty_reply_falls_back_to_structural(monkeypatch):
             "standard_number": "IS 3055",
         },
         method="llm",
-        llm_client=StrictGroqClientStub("   "),
+        llm_client=StrictOpenAIClientStub("   "),
     )
     assert chunk.context_generation_method == "structural"
     clear_context_cache()
@@ -404,7 +404,7 @@ def test_llm_path_stays_off_behind_the_feature_flag(monkeypatch):
     monkeypatch.setattr(settings, "ENABLE_LLM_CONTEXTUALIZATION", False)
     clear_context_cache()
 
-    client = StrictGroqClientStub()
+    client = StrictOpenAIClientStub()
     chunk = contextualize_chunk(
         {
             "chunk_id": "c_llm_off",

@@ -103,11 +103,11 @@ def query_documents(payload: QueryRequest, request: Request):
             )
 
     # Dynamic check: ensure generator is attached if available
-    if rag_pipeline.generator is None and settings.llm_available:
+    if getattr(rag_pipeline, "generator", None) is None and settings.llm_available:
         try:
             from app.main import ensure_generator
             gen = ensure_generator(request.app)
-            if gen is not None:
+            if gen is not None and hasattr(rag_pipeline, "generator"):
                 rag_pipeline.generator = gen
         except Exception:
             pass
