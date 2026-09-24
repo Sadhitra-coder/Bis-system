@@ -346,6 +346,166 @@ def aggregate_chunks_by_standard(
 
 
 # ============================================================
+# 3b. QCO LOOKUP & JUSTIFICATION GENERATION (PRD R2)
+# ============================================================
+
+def lookup_qco_for_standard(
+    standard_number: str,
+    knowledge_repo: Any = None,
+) -> Optional[Dict[str, Any]]:
+    """
+    Looks up matching Quality Control Order (QCO) for a standard from SQLite.
+    Queries the 'qcos' table joined with 'knowledge_relationships' on 'target_entity_id'.
+    Returns dictionary with is_mandatory, qco_number, regulating_authority, qco_title or None.
+    """
+    if not standard_number:
+        return None
+
+    std_m = re.search(r"IS(?:/IEC)?\s*(\d+)", standard_number, re.IGNORECASE)
+    if not std_m:
+        return None
+    base_num = std_m.group(1)
+    part_m = re.search(r"Part\s*(\d+)", standard_number, re.IGNORECASE)
+    part_num = part_m.group(1) if part_m else None
+
+    conn = None
+    close_after = False
+    try:
+        if knowledge_repo and hasattr(knowledge_repo, "_conn"):
+            conn = knowledge_repo._conn
+        else:
+            from app.config import DATA_DIR
+            import sqlite3
+            db_path = DATA_DIR / "knowledge" / "bis_knowledge.db"
+            if db_path.exists():
+                conn = sqlite3.connect(str(db_path), check_same_thread=False)
+                conn.row_factory = sqlite3.Row
+                close_after = True
+
+        if conn is None:
+            return None
+
+        cursor = conn.cursor()
+        query = """
+            SELECT q.qco_id, q.qco_number, q.title, q.issuing_ministry, q.is_mandatory, kr.target_entity_id
+            FROM qcos q
+            JOIN knowledge_relationships kr ON kr.source_entity_id = q.qco_id
+            WHERE kr.source_entity_type = 'QCO' AND kr.relationship_type = 'APPLIES_TO'
+        """
+        rows = cursor.execute(query).fetchall()
+
+        matched_row = None
+        for r in rows:
+            target_str = r[5] if isinstance(r, (list, tuple)) else r["target_entity_id"]
+            qb_m = re.search(r"IS(?:/IEC)?\s*(\d+)", target_str, re.IGNORECASE)
+            if not qb_m:
+                continue
+            q_base = qb_m.group(1)
+            qp_m = re.search(r"Part\s*(\d+)", target_str, re.IGNORECASE)
+            q_part = qp_m.group(1) if qp_m else None
+
+            if q_base == base_num:
+                if part_num is None or q_part is None or part_num == q_part:
+                    matched_row = r
+                    break
+
+        if matched_row:
+            q_num = matched_row[1] if isinstance(matched_row, (list, tuple)) else matched_row["qco_number"]
+            title = matched_row[2] if isinstance(matched_row, (list, tuple)) else matched_row["title"]
+            ministry = matched_row[3] if isinstance(matched_row, (list, tuple)) else matched_row["issuing_ministry"]
+            is_mand = bool(matched_row[4] if isinstance(matched_row, (list, tuple)) else matched_row["is_mandatory"])
+            return {
+                "is_mandatory": is_mand,
+                "qco_number": q_num,
+                "qco_title": title,
+                "regulating_authority": ministry,
+            }
+        return None
+    except Exception as e:
+        logger.warning("Error querying QCO for standard %s: %s", standard_number, e)
+        return None
+    finally:
+        if close_after and conn is not None:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+
+def generate_candidate_justification(
+    candidate_standard_number: str,
+    standard_title: Optional[str],
+    product_context: ProductContext,
+    chunks: List[Dict[str, Any]],
+    qco_info: Optional[Dict[str, Any]],
+    mapping_status: MappingStatus,
+    supporting_clause_ids: List[str],
+) -> str:
+    """
+    Generates a template-based, evidence-grounded 'why' justification string
+    referencing extracted product attributes, retrieved clauses/titles, and QCO status.
+    """
+    if mapping_status in (MappingStatus.WEAK_CANDIDATE, MappingStatus.INSUFFICIENT_EVIDENCE):
+        return (
+            f"{candidate_standard_number} match is tentative and requires verification "
+            f"against the standard's scope clause (insufficient clause evidence in corpus)."
+        )
+
+    attrs = []
+    if product_context.product_name:
+        attrs.append(product_context.product_name)
+    elif product_context.primary_identifier:
+        attrs.append(product_context.primary_identifier)
+
+    if product_context.material:
+        attrs.append(f"made of {product_context.material}")
+    if product_context.technology:
+        attrs.append(f"utilizing {product_context.technology}")
+    if product_context.intended_use:
+        attrs.append(f"intended for {product_context.intended_use}")
+
+    for k, v in (product_context.technical_characteristics or {}).items():
+        val_str = str(v)
+        if val_str and val_str.lower() not in " ".join(attrs).lower():
+            attrs.append(f"{k.replace('_', ' ')} '{val_str}'")
+
+    product_spec = ", ".join(attrs) if attrs else (product_context.primary_identifier or "the specified product")
+
+    clause_ref = None
+    if supporting_clause_ids:
+        clause_ref = f"Clause {supporting_clause_ids[0]}"
+
+    scope_title = None
+    for ch in chunks:
+        ch_meta = ch.get("metadata", {}) if isinstance(ch, dict) else {}
+        heading = ch_meta.get("heading_path") or ch_meta.get("section_title") or ""
+        if "scope" in heading.lower() or "requirement" in heading.lower():
+            scope_title = heading.strip()
+            break
+
+    if clause_ref and scope_title:
+        evidence_phrase = f", matching the scope defined in {clause_ref} ({scope_title})"
+    elif clause_ref:
+        evidence_phrase = f", matching the scope defined in {clause_ref}"
+    elif standard_title:
+        evidence_phrase = f", matching the scope defined in '{standard_title}'"
+    else:
+        evidence_phrase = ""
+
+    title_suffix = f" ({standard_title})" if standard_title else ""
+    if qco_info and qco_info.get("is_mandatory"):
+        auth = qco_info.get("regulating_authority") or "Regulating Authority"
+        order_name = qco_info.get("qco_title") or "Quality Control Order"
+        order_num = qco_info.get("qco_number")
+        order_ref = f"{order_name} ({order_num})" if order_num else order_name
+        qco_text = f" Mandatory under {auth} {order_ref}."
+    else:
+        qco_text = " Voluntary standard (no mandatory QCO identified in current records)."
+
+    return f"{candidate_standard_number}{title_suffix} applies because the query specifies {product_spec}{evidence_phrase}.{qco_text}"
+
+
+# ============================================================
 # 4. CANDIDATE SCORING & STATUS EVALUATOR (Section 6, 11, 15, 16, 17)
 # ============================================================
 
@@ -534,6 +694,27 @@ def score_standard_candidate(
         verification_required = True
         verification_reason = "Available evidence does not adequately corroborate standard coverage."
 
+    # 7. Quality Control Order (QCO) Lookup (PRD R2)
+    qco_info = lookup_qco_for_standard(std_number, knowledge_repo=knowledge_repo)
+    if qco_info:
+        is_mandatory = True
+        qco_number = qco_info["qco_number"]
+        regulating_authority = qco_info["regulating_authority"]
+    else:
+        is_mandatory = False
+        qco_number = None
+        regulating_authority = None
+
+    justification = generate_candidate_justification(
+        candidate_standard_number=std_number,
+        standard_title=std_title,
+        product_context=product_context,
+        chunks=chunks,
+        qco_info=qco_info,
+        mapping_status=status,
+        supporting_clause_ids=clause_ids,
+    )
+
     mapping_id = f"map_{product_context.product_context_id[:8]}_{std_number.replace(' ', '_')}"
 
     return ProductStandardCandidate(
@@ -554,6 +735,10 @@ def score_standard_candidate(
         confidence_score=mapping_score,  # evidence-backed candidate fit
         verification_required=verification_required,
         verification_reason=verification_reason,
+        is_mandatory=is_mandatory,
+        qco_number=qco_number,
+        regulating_authority=regulating_authority,
+        justification=justification,
         created_at=time.time(),
     )
 
@@ -685,6 +870,10 @@ def explain_standard_mapping(
         "standard_title": candidate.standard_title,
         "mapping_status": candidate.mapping_status.value,
         "mapping_score": candidate.mapping_score,
+        "is_mandatory": candidate.is_mandatory,
+        "qco_number": candidate.qco_number,
+        "regulating_authority": candidate.regulating_authority,
+        "justification": candidate.justification,
         "reasons": [r.to_dict() for r in candidate.mapping_reasons],
         "supporting_clause_ids": candidate.supporting_clause_ids,
         "supporting_evidence_ids": candidate.supporting_evidence_ids,

@@ -6,12 +6,12 @@ CONFIGURATION
 Every runtime value comes from app.config.settings. This module
 does not call load_dotenv() or os.getenv(): Settings already
 reads .env, and having two places read the environment meant
-GROQ_MODEL could differ between the ingestion stage and the
+OPENAI_MODEL could differ between the ingestion stage and the
 answer stage.
 
 RELIABILITY
 -----------
-The Groq call goes through app.llm_client.GroqClient, which adds
+The OpenAI call goes through app.llm_client.OpenAIClient, which adds
 retry with exponential backoff for transient failures (rate
 limits, timeouts, 5xx) and fails fast on permanent ones (bad key,
 unknown model). A failed call raises - it is never converted into
@@ -24,7 +24,7 @@ import re
 from typing import Any, Dict, List, Mapping, Optional, Tuple
 
 from app.config import settings
-from app.llm_client import GroqClient
+from app.llm_client import OpenAIClient
 from app.rag.source_format import extract_source_identity, format_source_header
 from app.confidence.models import Decision, ConfidenceResult
 
@@ -61,13 +61,13 @@ class AnswerGenerator:
         model: Optional[str] = None,
         temperature: Optional[float] = None,
         max_tokens: Optional[int] = None,
-        client: Optional[GroqClient] = None
+        client: Optional[OpenAIClient] = None
     ) -> None:
         """
         Parameters
         ----------
         model:
-            Groq model id. Defaults to settings.GROQ_MODEL.
+            OpenAI model id. Defaults to settings.OPENAI_MODEL.
 
         temperature:
             Defaults to settings.GENERATION_TEMPERATURE.
@@ -76,16 +76,16 @@ class AnswerGenerator:
             Defaults to settings.GENERATION_MAX_TOKENS.
 
         client:
-            Preloaded GroqClient. Supplied by the API startup
+            Preloaded OpenAIClient. Supplied by the API startup
             hook so one client is shared per process.
 
         Raises
         ------
         LLMUnavailableError
-            If GROQ_API_KEY is not configured.
+            If OPENAI_API_KEY is not configured.
         """
 
-        self.model = model or settings.GROQ_MODEL
+        self.model = model or settings.OPENAI_MODEL
 
         self.temperature = (
             settings.GENERATION_TEMPERATURE
@@ -102,12 +102,12 @@ class AnswerGenerator:
         # ----------------------------------------------------
         # CLIENT
         #
-        # GroqClient raises LLMUnavailableError when the key is
+        # OpenAIClient raises LLMUnavailableError when the key is
         # missing, so a misconfigured deployment fails at
         # construction rather than on the first user query.
         # ----------------------------------------------------
 
-        self.client = client if client is not None else GroqClient()
+        self.client = client if client is not None else OpenAIClient()
 
         logger.info(
             "Answer generator ready | model=%s | temperature=%.2f",
@@ -859,25 +859,29 @@ Now provide the final JSON response.
         )
 
         # ----------------------------------------------------
-        # CALL GROQ
+        # CALL OPENAI
         # ----------------------------------------------------
 
-        response_text = self.client.chat_completion(
-            messages=[
-                {
-                    "role": "system",
-                    "content": system_prompt
-                },
-                {
-                    "role": "user",
-                    "content": user_prompt
-                }
-            ],
-            model=self.model,
-            temperature=self.temperature,
-            max_completion_tokens=self.max_tokens,
-            description="answer generation"
-        ).strip()
+        try:
+            response_text = self.client.chat_completion(
+                messages=[
+                    {
+                        "role": "system",
+                        "content": system_prompt
+                    },
+                    {
+                        "role": "user",
+                        "content": user_prompt
+                    }
+                ],
+                model=self.model,
+                temperature=self.temperature,
+                max_completion_tokens=self.max_tokens,
+                description="answer generation"
+            ).strip()
+        except Exception as error:
+            logger.error("OpenAI answer generation call failed: %s", error, exc_info=True)
+            raise
 
         logger.info("Answer generated successfully.")
 

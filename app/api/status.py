@@ -12,15 +12,28 @@ def get_status(request: Request):
     collection = getattr(request.app.state, "collection", None)
     chunks_count = collection.count() if collection is not None else 0
 
+    # Dynamic recovery / health re-check: ensure generator if settings allow
+    if getattr(request.app.state, "generator", None) is None and settings.llm_available:
+        try:
+            from app.main import ensure_generator
+            ensure_generator(request.app)
+        except Exception:
+            pass
+
+    generator = getattr(request.app.state, "generator", None)
+    is_llm_ready = bool(generator is not None and settings.llm_available)
+    last_error = getattr(request.app.state, "llm_last_error", None)
+
     return {
         "status": "ready" if chunks_count > 0 else "empty",
         "collection_name": settings.CHROMA_COLLECTION_NAME,
         "chunks_indexed": chunks_count,
-        "llm_available": settings.llm_available,
+        "llm_available": is_llm_ready,
+        "llm_last_error": None if is_llm_ready else last_error,
         "models": {
             "embedding_model": settings.EMBEDDING_MODEL,
             "reranker_model": settings.RERANKER_MODEL,
-            "generator_model": settings.GROQ_MODEL if settings.llm_available else None
+            "generator_model": settings.OPENAI_MODEL if is_llm_ready else None
         }
     }
 

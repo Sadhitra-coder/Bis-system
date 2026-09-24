@@ -948,12 +948,14 @@ class RAGPipeline:
                 target_p = product_context_obj.primary_identifier if product_context_obj else 'the specified product'
                 if candidate_standards_list:
                     top_c = candidate_standards_list[0]
-                    answer = (
-                        f"Candidate standard {top_c['standard_number']} ({top_c['mapping_status']}) was identified for {target_p} "
-                        f"based on technical/product terminology and supporting standard text. "
-                        f"However, legal applicability and mandatory certification requirements require verification "
-                        f"against authoritative gazette notifications and QCO schedules."
-                    )
+                    justification = top_c.get("justification")
+                    if justification:
+                        answer = justification
+                    else:
+                        answer = (
+                            f"Candidate standard {top_c['standard_number']} ({top_c['mapping_status']}) was identified for {target_p} "
+                            f"based on technical/product terminology and supporting standard text."
+                        )
                 else:
                     answer = (
                         f"Verification Required: No candidate standard was identified for {target_p} in the current corpus. "
@@ -1042,16 +1044,13 @@ class RAGPipeline:
             if not final_verification_reason:
                 final_verification_reason = f"Temporal verification required: {temporal_resolution.reason}"
 
-        # Phase 11: Candidate mapping policy enforcement (Section 20, 21, 30)
-        if query_context.intent.intent == QueryIntentType.APPLICABILITY_QUERY:
-            final_decision = Decision.VERIFICATION_REQUIRED.value
-            final_verification_required = True
-            if not final_verification_reason:
-                final_verification_reason = (
-                    "Candidate standard mapping prepared. Legal applicability and mandatory certification "
-                    "require verification against gazette notifications and QCO schedules."
-                )
-        elif query_context.intent.intent == QueryIntentType.STANDARD_DISCOVERY and not candidate_standards_list:
+        # Phase 11: Candidate mapping policy enforcement (PRD R2)
+        # Unconditional VERIFICATION_REQUIRED override removed in accordance with PRD R2.
+        # Applicability queries now pass through standard EvidenceEvaluator scoring.
+        if (
+            (query_context.intent.intent == QueryIntentType.APPLICABILITY_QUERY or query_context.intent.intent == QueryIntentType.STANDARD_DISCOVERY)
+            and not candidate_standards_list
+        ):
             final_decision = Decision.VERIFICATION_REQUIRED.value
             final_verification_required = True
             if not final_verification_reason:

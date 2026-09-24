@@ -79,7 +79,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from app.config import BASE_DIR, settings
-from app.llm_client import GroqClient, LLMUnavailableError
+from app.llm_client import OpenAIClient, LLMUnavailableError
 
 
 # ============================================================
@@ -96,7 +96,7 @@ logger = logging.getLogger(__name__)
 # This module performs no environment lookups of its own.
 # ============================================================
 
-GROQ_MODEL = settings.GROQ_STRUCTURE_MODEL
+OPENAI_MODEL = settings.OPENAI_STRUCTURE_MODEL
 
 DEFAULT_BATCH_SIZE = settings.STRUCTURE_BATCH_SIZE
 
@@ -943,7 +943,7 @@ def parse_blocks(
 
 def initialize_llm():
     """
-    Initialize the shared Groq client.
+    Initialize the shared OpenAI client.
 
     Returns
     -------
@@ -968,7 +968,7 @@ def initialize_llm():
 
     try:
 
-        client = GroqClient()
+        client = OpenAIClient()
 
         return (
             client,
@@ -1520,7 +1520,7 @@ def semantic_structure(
             {
                 "enabled": False,
                 "used": False,
-                "model": GROQ_MODEL,
+                "model": OPENAI_MODEL,
                 "reason": initialization_error,
                 "llm_batches_used": 0,
                 "fallback_batches": 0
@@ -1575,7 +1575,7 @@ def semantic_structure(
 
         try:
 
-            # GroqClient handles retry / backoff for
+            # OpenAIClient handles retry / backoff for
             # transient failures. Anything raised here is
             # already unrecoverable.
             response_text = (
@@ -1593,7 +1593,7 @@ def semantic_structure(
                             "content": prompt
                         }
                     ],
-                    model=GROQ_MODEL,
+                    model=OPENAI_MODEL,
                     temperature=0,
                     max_completion_tokens=(
                         MAX_LLM_OUTPUT_TOKENS
@@ -1706,7 +1706,7 @@ def semantic_structure(
         {
             "enabled": True,
             "used": llm_batches_used > 0,
-            "model": GROQ_MODEL,
+            "model": OPENAI_MODEL,
             "llm_batches_used": (
                 llm_batches_used
             ),
@@ -2686,17 +2686,17 @@ def print_environment():
     )
 
     print(
-        "GROQ key     : "
+        "OpenAI key   : "
         + (
             "FOUND"
-            if settings.GROQ_API_KEY
+            if settings.OPENAI_API_KEY
             else "NOT FOUND"
         )
     )
 
     print(
         f"Model        : "
-        f"{GROQ_MODEL}"
+        f"{OPENAI_MODEL}"
     )
 
     print(
@@ -2777,7 +2777,7 @@ def main():
     )
 
     print(
-        f"Model : {GROQ_MODEL}"
+        f"Model : {OPENAI_MODEL}"
     )
 
     print(

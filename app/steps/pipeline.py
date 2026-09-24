@@ -9,7 +9,7 @@ Orchestrates the complete document processing workflow:
         ↓ (markdown output)
     Cleaning (lossless formatting)
         ↓ (cleaned output)
-    Structuring (Groq AI)
+    Structuring (OpenAI AI)
         ↓ (structured output)
     Normalization (artifact removal)
         ↓ (normalized output)
@@ -352,7 +352,7 @@ def run_structuring(
     relative_path: Path
 ) -> Path:
     """
-    STEP 3: Structure Markdown using Groq.
+    STEP 3: Structure Markdown using OpenAI.
 
     Args:
         cleaned_path: Path to cleaned Markdown.

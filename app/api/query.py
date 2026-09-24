@@ -102,6 +102,16 @@ def query_documents(payload: QueryRequest, request: Request):
                 detail=f"RAG pipeline not ready. Ensure documents are ingested: {e}"
             )
 
+    # Dynamic check: ensure generator is attached if available
+    if rag_pipeline.generator is None and settings.llm_available:
+        try:
+            from app.main import ensure_generator
+            gen = ensure_generator(request.app)
+            if gen is not None:
+                rag_pipeline.generator = gen
+        except Exception:
+            pass
+
     try:
         # top_k is the number of chunks the caller wants grounding the answer,
         # so it maps to rerank_top_k. retrieval_top_k is raised alongside it:

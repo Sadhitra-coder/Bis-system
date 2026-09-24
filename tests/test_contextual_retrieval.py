@@ -227,15 +227,15 @@ def test_malformed_context_fallback():
 
 class StrictGroqClientStub:
     """
-    A stand-in for GroqClient that exposes ONLY the real interface.
+    A stand-in for OpenAIClient that exposes ONLY the real interface.
 
     Deliberately not a MagicMock. A MagicMock answers every attribute, so it
-    satisfied `client.generate(prompt)` — a method GroqClient has never had —
+    satisfied `client.generate(prompt)` — a method OpenAIClient has never had —
     and the entire LLM contextualization path was dead in production while
     the suite stayed green. Any call to a method the real client lacks must
     raise AttributeError here, which is the whole point of the stub.
 
-    The signature mirrors app.llm_client.GroqClient.chat_completion exactly,
+    The signature mirrors app.llm_client.OpenAIClient.chat_completion exactly,
     so a drift in either direction becomes a TypeError.
     """
 
@@ -324,7 +324,7 @@ def test_llm_prompt_is_a_two_turn_chat_with_bounded_input(monkeypatch):
     assert roles == ["system", "user"]
     assert call["temperature"] == 0.0
     assert call["max_completion_tokens"] == settings.LLM_CONTEXT_MAX_TOKENS
-    assert call["model"] == settings.GROQ_MODEL
+    assert call["model"] == settings.OPENAI_MODEL
     # The passage is truncated: one preface does not need the whole chunk,
     # and an unbounded prompt is an unbounded bill.
     assert len(call["messages"][1]["content"]) < len(long_body)

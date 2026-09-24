@@ -15,9 +15,9 @@ embedding with BGE-large, real writes to a real persisted Chroma directory.
 Two things are substituted, both stated plainly rather than hidden:
 
   * LLM structuring degrades to the deterministic classifier, because no
-    GROQ_API_KEY is present in the test environment. This is the project's
+    OPENAI_API_KEY is present in the test environment. This is the project's
     own documented fallback (STRUCTURE_ALLOW_FALLBACK), not a test-only path.
-  * Answer generation uses a strict stub of the Groq client, for the same
+  * Answer generation uses a strict stub of the OpenAI client, for the same
     reason. Retrieval, reranking, and source formatting are real.
 """
 
@@ -279,7 +279,7 @@ class RecordingPipeline:
             "sources": build_sources(results),
             "retrieved_chunks": len(results),
             "reranked_chunks": len(results),
-            "model": settings.GROQ_MODEL,
+            "model": settings.OPENAI_MODEL,
         }
 
 
@@ -350,7 +350,7 @@ def test_query_sources_distinguish_a_citing_document_from_the_standard():
                 "sources": build_sources([_standard_result("c1", relation="reference")]),
                 "retrieved_chunks": 1,
                 "reranked_chunks": 1,
-                "model": settings.GROQ_MODEL,
+                "model": settings.OPENAI_MODEL,
             }
 
     client = _query_client(CitingPipeline())
@@ -469,7 +469,7 @@ def real_ingestion(tmp_path_factory):
 
     test_registry = IngestionRegistry(registry_file=root / "registry.json")
 
-    # Structuring calls Groq. No key is present in the test environment, so
+    # Structuring calls OpenAI. No key is present in the test environment, so
     # the documented deterministic fallback is enabled explicitly rather
     # than letting ingestion fail on an unrelated missing credential.
     with patch.object(settings, "STRUCTURE_ALLOW_FALLBACK", True), \

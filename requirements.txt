@@ -37,7 +37,7 @@ numpy==1.26.4                     # app/rag/retriever.py
 rank-bm25==0.2.2                  # app/rag/retriever.py
 
 # ---------------- LLM ----------------
-groq==0.31.0                      # app/steps/structure.py, app/rag/generator.py
+openai>=1.0.0                     # app/steps/structure.py, app/rag/generator.py
 
 # ---------------- Testing ----------------
 pytest==9.1.1
@@ -48,5 +48,5 @@ httpx==0.28.1                     # FastAPI TestClient
 #   sqlalchemy, psycopg2-binary  -> no Postgres code remains
 #   qdrant-client                -> vector store is ChromaDB
 #   langchain, langchain-community -> not used
-#   openai                       -> LLM access is via groq
+#   groq                         -> LLM provider replaced by official OpenAI SDK
 # ============================================================

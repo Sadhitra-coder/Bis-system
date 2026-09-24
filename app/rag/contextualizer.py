@@ -329,7 +329,7 @@ def generate_llm_context(
 
     THE BUG THIS FIXES
     ------------------
-    The call was `client.generate(prompt)`. GroqClient has no `generate`
+    The call was `client.generate(prompt)`. The client has no `generate`
     method — its interface is `chat_completion(messages=..., model=...)`.
     Any real client therefore raised AttributeError, which the broad
     `except` below swallowed into a warning, so the feature reported itself
@@ -360,7 +360,7 @@ def generate_llm_context(
                 {"role": "system", "content": _LLM_CONTEXT_SYSTEM_PROMPT},
                 {"role": "user", "content": user_prompt},
             ],
-            model=model or settings.GROQ_MODEL,
+            model=model or settings.OPENAI_MODEL,
             temperature=0.0,
             max_completion_tokens=settings.LLM_CONTEXT_MAX_TOKENS,
             description="chunk contextualization",
@@ -490,7 +490,7 @@ def contextualize_chunk(
     requested_method = method or settings.CONTEXT_GENERATION_METHOD
     version = settings.CONTEXT_GENERATION_VERSION
     resolved_model = (
-        (llm_model or settings.GROQ_MODEL) if requested_method == "llm" else None
+        (llm_model or settings.OPENAI_MODEL) if requested_method == "llm" else None
     )
 
     # Check cache. The key covers every metadata field that feeds context

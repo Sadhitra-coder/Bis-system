@@ -30,7 +30,7 @@ tests/
 docs/
 *.md
 
-# Keep data/knowledge, data/vector_db, and pre-baked model_cache explicitly
+# Heavy model cache already baked into base image
+model_cache/
+data/raw/
 !data/knowledge/bis_knowledge.db
-!data/vector_db/**
-!model_cache/**

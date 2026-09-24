@@ -1,5 +1,5 @@
 """
-Shared Groq client with retry / exponential backoff.
+Shared OpenAI client with retry / exponential backoff.
 
 Both the ingestion structuring stage (app/steps/structure.py)
 and answer generation (app/rag/generator.py) go through here so
@@ -16,9 +16,13 @@ Design rules:
 
     3. Exhausted retries raise LLMError. Callers decide what to
        do; this module never invents a successful result.
+
+    4. Errors are logged with full exception tracebacks (exc_info=True)
+       for rapid diagnostics in Azure Container Apps logs.
 """
 
 import logging
+import os
 import random
 import time
 from typing import Any, Dict, List, Optional
@@ -58,10 +62,7 @@ class LLMCallError(LLMError):
 # ============================================================
 
 # Substrings that indicate a retryable condition. Matched
-# against the exception type name and message so that this
-# module does not have to import Groq's exception classes
-# (which move between library versions).
-
+# against the exception type name and message.
 _TRANSIENT_MARKERS = (
     "ratelimit",
     "rate limit",
@@ -88,6 +89,7 @@ _TRANSIENT_MARKERS = (
 _PERMANENT_MARKERS = (
     "authentication",
     "invalid api key",
+    "invalid_api_key",
     "unauthorized",
     "401",
     "403",
@@ -109,7 +111,6 @@ def is_transient_error(error: BaseException) -> bool:
     example, a 401 is never retried even if the message also
     happens to mention "connection".
     """
-
     text = f"{type(error).__name__} {error}".lower()
 
     for marker in _PERMANENT_MARKERS:
@@ -129,9 +130,9 @@ def is_transient_error(error: BaseException) -> bool:
 # CLIENT
 # ============================================================
 
-class GroqClient:
+class OpenAIClient:
     """
-    Thin wrapper over groq.Groq adding retry and backoff.
+    Thin wrapper over openai.OpenAI adding retry and backoff.
     """
 
     def __init__(
@@ -145,11 +146,12 @@ class GroqClient:
         Parameters
         ----------
         api_key:
-            Groq API key. Falls back to settings.GROQ_API_KEY.
+            OpenAI API key. Falls back to settings.OPENAI_API_KEY
+            or os.environ.get("OPENAI_API_KEY").
 
         max_retries:
             Number of retries AFTER the first attempt.
-            Falls back to settings.GROQ_MAX_RETRIES.
+            Falls back to settings.OPENAI_MAX_RETRIES.
 
         base_delay:
             First backoff delay in seconds.
@@ -160,48 +162,51 @@ class GroqClient:
         Raises
         ------
         LLMUnavailableError
-            If no API key is available, or the Groq client
+            If no API key is available, or the OpenAI client
             cannot be constructed.
         """
-
-        resolved_key = api_key or settings.GROQ_API_KEY
+        resolved_key = (
+            api_key
+            or settings.OPENAI_API_KEY
+            or os.environ.get("OPENAI_API_KEY")
+        )
 
         if not resolved_key:
             raise LLMUnavailableError(
-                "GROQ_API_KEY is not set. "
-                "Add it to .env (see .env.example)."
+                "OPENAI_API_KEY is not set. "
+                "Add it to .env or Azure Container App configuration."
             )
 
         self.max_retries = (
-            settings.GROQ_MAX_RETRIES
+            settings.OPENAI_MAX_RETRIES
             if max_retries is None
             else max_retries
         )
 
         self.base_delay = (
-            settings.GROQ_RETRY_BASE_DELAY
+            settings.OPENAI_RETRY_BASE_DELAY
             if base_delay is None
             else base_delay
         )
 
         self.max_delay = (
-            settings.GROQ_RETRY_MAX_DELAY
+            settings.OPENAI_RETRY_MAX_DELAY
             if max_delay is None
             else max_delay
         )
 
         try:
-            from groq import Groq
+            from openai import OpenAI
         except Exception as error:
             raise LLMUnavailableError(
-                f"The 'groq' package is not importable: {error}"
+                f"The 'openai' package is not importable: {error}"
             ) from error
 
         try:
-            self._client = Groq(api_key=resolved_key)
+            self._client = OpenAI(api_key=resolved_key)
         except Exception as error:
             raise LLMUnavailableError(
-                f"Could not construct the Groq client: {error}"
+                f"Could not construct the OpenAI client: {error}"
             ) from error
 
     # --------------------------------------------------------
@@ -214,13 +219,8 @@ class GroqClient:
 
         attempt is 1-based: the delay after the first failure.
         """
-
         raw = self.base_delay * (2 ** (attempt - 1))
-
         capped = min(raw, self.max_delay)
-
-        # Full jitter avoids synchronised retries when several
-        # documents are ingested concurrently.
         return random.uniform(0.0, capped)
 
     # --------------------------------------------------------
@@ -233,6 +233,7 @@ class GroqClient:
         model: str,
         temperature: float = 0.0,
         max_completion_tokens: Optional[int] = None,
+        max_tokens: Optional[int] = None,
         response_format: Optional[Dict[str, Any]] = None,
         description: str = "completion"
     ) -> str:
@@ -242,16 +243,16 @@ class GroqClient:
         Parameters
         ----------
         messages:
-            Chat messages in Groq/OpenAI format.
+            Chat messages in OpenAI format.
 
         model:
-            Model identifier.
+            Model identifier (e.g. 'gpt-4o-mini').
 
         temperature:
             Sampling temperature.
 
         max_completion_tokens:
-            Output token ceiling.
+            Output token ceiling (mapped to max_tokens or max_completion_tokens).
 
         response_format:
             e.g. {"type": "json_object"} to force JSON.
@@ -273,6 +274,7 @@ class GroqClient:
             The call failed permanently, or every retry was
             exhausted.
         """
+        tokens_ceiling = max_completion_tokens if max_completion_tokens is not None else max_tokens
 
         request: Dict[str, Any] = {
             "model": model,
@@ -280,36 +282,27 @@ class GroqClient:
             "temperature": temperature,
         }
 
-        if max_completion_tokens is not None:
-            request["max_completion_tokens"] = max_completion_tokens
+        if tokens_ceiling is not None:
+            # Pass max_tokens for universal compatibility across OpenAI models/SDKs
+            request["max_tokens"] = tokens_ceiling
 
         if response_format is not None:
             request["response_format"] = response_format
 
         total_attempts = self.max_retries + 1
-
         last_error: Optional[BaseException] = None
 
         for attempt in range(1, total_attempts + 1):
-
             try:
-
-                completion = (
-                    self._client.chat.completions.create(**request)
-                )
-
+                completion = self._client.chat.completions.create(**request)
                 content = completion.choices[0].message.content
 
                 if not content or not content.strip():
-                    # Treated as transient: the request was
-                    # accepted but produced nothing usable.
-                    raise TimeoutError(
-                        "Groq returned empty content."
-                    )
+                    raise TimeoutError("OpenAI returned empty content.")
 
                 if attempt > 1:
                     logger.info(
-                        "Groq %s succeeded on attempt %d/%d.",
+                        "OpenAI %s succeeded on attempt %d/%d.",
                         description,
                         attempt,
                         total_attempts
@@ -318,52 +311,48 @@ class GroqClient:
                 return content
 
             except Exception as error:
-
                 last_error = error
-
                 permanent = not is_transient_error(error)
-
                 exhausted = attempt >= total_attempts
 
                 if permanent:
                     logger.error(
-                        "Groq %s failed permanently on attempt "
-                        "%d/%d: %s",
+                        "OpenAI %s failed permanently on attempt %d/%d: %s",
                         description,
                         attempt,
                         total_attempts,
-                        error
+                        error,
+                        exc_info=True
                     )
-
                     raise LLMCallError(
-                        f"Groq {description} failed permanently: "
-                        f"{error}"
+                        f"OpenAI {description} failed permanently: {error}"
                     ) from error
 
                 if exhausted:
                     logger.error(
-                        "Groq %s failed after %d attempts: %s",
+                        "OpenAI %s failed after %d attempts: %s",
                         description,
                         total_attempts,
-                        error
+                        error,
+                        exc_info=True
                     )
                     break
 
                 delay = self._delay_for_attempt(attempt)
-
                 logger.warning(
-                    "Groq %s failed on attempt %d/%d (%s). "
-                    "Retrying in %.2fs.",
+                    "OpenAI %s failed on attempt %d/%d (%s). Retrying in %.2fs.",
                     description,
                     attempt,
                     total_attempts,
                     error,
                     delay
                 )
-
                 time.sleep(delay)
 
         raise LLMCallError(
-            f"Groq {description} failed after "
-            f"{total_attempts} attempts: {last_error}"
+            f"OpenAI {description} failed after {total_attempts} attempts: {last_error}"
         ) from last_error
+
+
+# Backwards compatibility alias for existing callers
+GroqClient = OpenAIClient

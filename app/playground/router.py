@@ -221,6 +221,16 @@ async def execute_playground_query(payload: PlaygroundQueryRequest, request: Req
                 detail=f"BIS Intelligence Engine is initializing. Please retry in a few moments: {exc}"
             )
 
+    # Dynamic check: ensure generator is attached if available
+    if rag_pipeline.generator is None and settings.llm_available:
+        try:
+            from app.main import ensure_generator
+            gen = ensure_generator(request.app)
+            if gen is not None:
+                rag_pipeline.generator = gen
+        except Exception:
+            pass
+
     top_k = payload.top_k or 5
     try:
         result = rag_pipeline.query(

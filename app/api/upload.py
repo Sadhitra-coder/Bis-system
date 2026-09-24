@@ -9,7 +9,7 @@ concurrency.
 
 NOT implemented, and a known production blocker: there is NO AUTHENTICATION
 on this or any other endpoint. Anyone able to reach the port can ingest
-documents, consume disk, and spend Groq credits. Adding an auth system was
+documents, consume disk, and spend OpenAI credits. Adding an auth system was
 explicitly out of scope for this phase; the limits below reduce the blast
 radius but do not close the hole.
 """

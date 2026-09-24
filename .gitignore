@@ -17,7 +17,8 @@ venv/
 data/vector_db/
 data/vector_db.*/
 data/knowledge.*/
-data/chunks/
+!data/chunks/
+!data/chunks/**
 data/raw/uploads/
 data/cleaned/
 data/markdown/

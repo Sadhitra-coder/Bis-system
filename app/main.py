@@ -56,16 +56,20 @@ async def lifespan(app: FastAPI):
         app.state.reranker = None
 
     # 3. Load generator
+    app.state.llm_last_error = None
     if settings.llm_available:
         try:
             generator = AnswerGenerator()
             app.state.generator = generator
+            logger.info("AnswerGenerator initialized successfully at startup.")
         except Exception as e:
-            logger.warning("Could not initialize generator: %s", e)
+            logger.error("Could not initialize generator at startup: %s", e, exc_info=True)
             app.state.generator = None
+            app.state.llm_last_error = f"{type(e).__name__}: {str(e)}"
     else:
-        logger.info("LLM is disabled or GROQ_API_KEY is not set.")
+        logger.info("LLM is disabled or OPENAI_API_KEY is not set.")
         app.state.generator = None
+        app.state.llm_last_error = "LLM is disabled (LLM_ENABLED=False) or OPENAI_API_KEY is not set."
 
     # 4. Inspect the persisted index, then initialize the RAG pipeline.
     try:
@@ -121,6 +125,46 @@ async def lifespan(app: FastAPI):
     yield
 
     logger.info("Shutting down BIS RAG Engine...")
+
+
+def ensure_generator(target_app: FastAPI) -> AnswerGenerator | None:
+    """
+    Dynamic health-recheck and recovery mechanism for the AnswerGenerator.
+
+    If the generator was uninitialized at startup due to transient failure or
+    missing credentials at container boot, this re-evaluates configuration and
+    attempts instantiation on-demand so transient errors don't permanently disable
+    generation.
+    """
+    if getattr(target_app.state, "generator", None) is not None:
+        return target_app.state.generator
+
+    if not settings.llm_available:
+        target_app.state.llm_last_error = (
+            "LLM is disabled (LLM_ENABLED=False) or OPENAI_API_KEY is not set."
+        )
+        return None
+
+    try:
+        generator = AnswerGenerator()
+        target_app.state.generator = generator
+        target_app.state.llm_last_error = None
+        logger.info("AnswerGenerator successfully initialized via dynamic recovery.")
+
+        pipeline = getattr(target_app.state, "rag_pipeline", None)
+        if pipeline is not None:
+            pipeline.generator = generator
+
+        return generator
+    except Exception as e:
+        logger.error(
+            "Dynamic initialization of AnswerGenerator failed: %s",
+            e,
+            exc_info=True,
+        )
+        target_app.state.generator = None
+        target_app.state.llm_last_error = f"{type(e).__name__}: {str(e)}"
+        return None
 
 
 app = FastAPI(

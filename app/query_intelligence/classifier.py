@@ -19,7 +19,7 @@ import re
 from typing import Any, Dict, List, Optional, Tuple
 
 from app.config import settings
-from app.llm_client import GroqClient
+from app.llm_client import OpenAIClient
 from app.rag.query import QueryEntities, normalize_query
 from app.query_intelligence.models import IntentClassification, QueryIntentType
 
@@ -376,7 +376,7 @@ _ALLOWED_INTENT_VALUES = {i.value for i in QueryIntentType}
 def classify_intent_llm(
     query: str,
     entities: QueryEntities,
-    client: Optional[GroqClient] = None,
+    client: Optional[OpenAIClient] = None,
 ) -> Optional[IntentClassification]:
     """
     Optional LLM classifier using strictly structured output.
@@ -386,10 +386,10 @@ def classify_intent_llm(
     if not getattr(settings, "ENABLE_LLM_INTENT_CLASSIFIER", False):
         return None
 
-    if not getattr(settings, "GROQ_API_KEY", None):
+    if not getattr(settings, "OPENAI_API_KEY", None):
         return None
 
-    groq_client = client or GroqClient()
+    openai_client = client or OpenAIClient()
     prompt = f"""
 You are an intent classifier for Indian Standards compliance intelligence.
 Classify the user query into EXACTLY one of the allowed categories:
@@ -406,9 +406,9 @@ Return valid JSON matching this schema:
 Do NOT output anything else.
 """
     try:
-        raw_res = groq_client.chat_completion(
+        raw_res = openai_client.chat_completion(
             messages=[{"role": "user", "content": prompt}],
-            model=settings.GROQ_MODEL,
+            model=settings.OPENAI_MODEL,
             temperature=0.0,
             max_tokens=200,
         )
@@ -441,7 +441,7 @@ Do NOT output anything else.
 def classify_intent(
     query: str,
     entities: QueryEntities,
-    client: Optional[GroqClient] = None,
+    client: Optional[OpenAIClient] = None,
 ) -> IntentClassification:
     """
     Unified entry point. Evaluates deterministic classifier first.

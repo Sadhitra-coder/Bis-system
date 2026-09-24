@@ -33,6 +33,6 @@ def configure_test_settings(monkeypatch):
     from app.config import settings
 
     monkeypatch.setattr(settings, "APP_ENV", "test")
-    if not settings.GROQ_API_KEY:
+    if not settings.OPENAI_API_KEY:
         monkeypatch.setattr(settings, "LLM_ENABLED", False)
 

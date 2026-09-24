@@ -91,16 +91,16 @@ class Settings(BaseSettings):
     # ---------------- Service-to-Service Security ----------------
     INTERNAL_SERVICE_KEY: Optional[str] = "complywise-internal-bis-key-default"
 
-    # ---------------- Groq / LLM ----------------
+    # ---------------- OpenAI / LLM ----------------
     # Structuring (ingestion) and answer generation (RAG) both
-    # use Groq. They may run on different models.
-    GROQ_API_KEY: Optional[str] = None
+    # use OpenAI. They may run on different models.
+    OPENAI_API_KEY: Optional[str] = None
 
     # Model used by app/steps/structure.py
-    GROQ_STRUCTURE_MODEL: str = "openai/gpt-oss-120b"
+    OPENAI_STRUCTURE_MODEL: str = "gpt-4o-mini"
 
     # Model used by app/rag/generator.py
-    GROQ_MODEL: str = "openai/gpt-oss-20b"
+    OPENAI_MODEL: str = "gpt-4o-mini"
 
     # Master switch for the LLM structuring stage.
     LLM_ENABLED: bool = True
@@ -108,10 +108,10 @@ class Settings(BaseSettings):
     # Master switch for optional LLM intent classification (Phase 10)
     ENABLE_LLM_INTENT_CLASSIFIER: bool = False
 
-    # Retry / backoff for all Groq calls.
-    GROQ_MAX_RETRIES: int = 3
-    GROQ_RETRY_BASE_DELAY: float = 1.0
-    GROQ_RETRY_MAX_DELAY: float = 20.0
+    # Retry / backoff for all OpenAI calls.
+    OPENAI_MAX_RETRIES: int = 3
+    OPENAI_RETRY_BASE_DELAY: float = 1.0
+    OPENAI_RETRY_MAX_DELAY: float = 20.0
 
     # When True, a batch that still fails after all retries
     # falls back to the deterministic Python classifier.
@@ -178,7 +178,7 @@ class Settings(BaseSettings):
     #
     # SECURITY POSTURE: these bound resource consumption only. The API has
     # NO AUTHENTICATION on any endpoint — anyone who can reach the port can
-    # ingest documents and spend Groq credits. That remains a known
+    # ingest documents and spend LLM credits. That remains a known
     # production blocker and is deliberately NOT addressed here; see the
     # Phase 6 report, section U.
 
@@ -212,10 +212,10 @@ class Settings(BaseSettings):
     @property
     def llm_available(self) -> bool:
         """
-        True only when the structuring LLM is both enabled
+        True only when the structuring/generation LLM is both enabled
         and actually usable (an API key is present).
         """
-        return bool(self.LLM_ENABLED and self.GROQ_API_KEY)
+        return bool(self.LLM_ENABLED and self.OPENAI_API_KEY)
 
 
 settings = Settings()

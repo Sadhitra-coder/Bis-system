@@ -257,6 +257,12 @@ class ProductStandardCandidate(BaseModel):
     verification_required: bool = False
     verification_reason: Optional[str] = None
 
+    # QCO and Applicability (PRD R2)
+    is_mandatory: bool = False
+    qco_number: Optional[str] = None
+    regulating_authority: Optional[str] = None
+    justification: Optional[str] = None
+
     created_at: float = Field(default_factory=time.time)
 
     def to_dict(self) -> Dict[str, Any]:
@@ -278,5 +284,9 @@ class ProductStandardCandidate(BaseModel):
             "confidence_score": round(float(self.confidence_score), 4),
             "verification_required": self.verification_required,
             "verification_reason": self.verification_reason,
+            "is_mandatory": self.is_mandatory,
+            "qco_number": self.qco_number,
+            "regulating_authority": self.regulating_authority,
+            "justification": self.justification,
             "created_at": self.created_at,
         }
