@@ -77,6 +77,33 @@ def _stem(w: str) -> str:
 
 _DOMAIN_FRAMING_STEMS = {_stem(w) for w in _DOMAIN_FRAMING_WORDS}
 
+_STANDARD_TITLES_CACHE: Dict[str, str] = {}
+
+def _get_standard_title(standard_number: str) -> str:
+    if not standard_number:
+        return ""
+    std_clean = standard_number.strip().upper()
+    if std_clean in _STANDARD_TITLES_CACHE:
+        return _STANDARD_TITLES_CACHE[std_clean]
+    try:
+        import sqlite3
+        import os
+        db_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "data", "knowledge", "bis_knowledge.db")
+        if not os.path.exists(db_path):
+            db_path = "data/knowledge/bis_knowledge.db"
+        conn = sqlite3.connect(db_path, timeout=5.0)
+        c = conn.cursor()
+        c.execute("SELECT title FROM standards WHERE standard_number = ? LIMIT 1", (std_clean,))
+        row = c.fetchone()
+        conn.close()
+        if row and row[0]:
+            _STANDARD_TITLES_CACHE[std_clean] = row[0]
+            return row[0]
+    except Exception:
+        pass
+    _STANDARD_TITLES_CACHE[std_clean] = ""
+    return ""
+
 # Negative assertion phrases that convert absence of evidence into negative domain facts
 _NEGATIVE_ASSERTION_PATTERNS = [
     re.compile(r"\b(?:does\s+not\s+exist|do\s+not\s+exist|no\s+such\s+standard\s+exists)\b", re.IGNORECASE),
@@ -369,10 +396,26 @@ class GroundingValidator:
 
         # 6. Numerical / Date / Quantity validation (Section 12)
         # Source text must support numbers.
-        # Cross-lingual detection: if the claim contains primarily non-Latin (e.g. Devanagari)
-        # characters, numerical and overlap checks against English source content are not
-        # meaningful — skip them to prevent false positives on multilingual answers.
-        combined_source_content = " ".join((ev.source_content or ev.content).lower() for ev in unique_citations)
+        # Enrich source text with official standard titles, clause titles, and metadata
+        content_parts = []
+        for ev in unique_citations:
+            content_parts.append(ev.source_content or ev.content)
+            if ev.standard_title:
+                content_parts.append(ev.standard_title)
+            elif ev.standard_number:
+                std_title = _get_standard_title(ev.standard_number)
+                if std_title:
+                    content_parts.append(std_title)
+            if ev.clause_title:
+                content_parts.append(ev.clause_title)
+            if ev.section:
+                content_parts.append(ev.section)
+            meta = getattr(ev, "metadata", {}) or {}
+            for k in ("standard_title", "title", "document_title", "clause_title"):
+                if meta.get(k):
+                    content_parts.append(str(meta[k]))
+        combined_source_content = " ".join(content_parts).lower()
+
         non_ascii_chars = sum(1 for c in claim.text if ord(c) > 0x0080)
         total_chars = max(len(claim.text.strip()), 1)
         is_non_latin_claim = non_ascii_chars / total_chars > 0.30  # >30% non-ASCII = multilingual
@@ -443,6 +486,7 @@ class GroundingValidator:
                     w in source_words
                     or sw in source_stems
                     or sw in combined_source_content
+                    or (w == "pvc" and ("polyvinyl chloride" in combined_source_content or "pvc" in combined_source_content))
                     or any(w in src or sw in src for src in source_words if len(src) >= 4)
                 ):
                     matched_words.add(w)
@@ -525,13 +569,16 @@ class GroundingValidator:
             if iss.startswith("unsupported_terms:missing="):
                 missing_terms_count = len(iss.split("=")[1].split(","))
 
+        has_specific_entities = bool(quantities or clause_matches or std_matches)
+        severe_terms_gap = (missing_terms_count >= 4 and has_specific_entities)
+
         has_severe_issues = any(
             iss.startswith("fake_or_unknown_citation_id")
             or "mismatch" in iss
             or iss.startswith("unsupported_numerical_value")
             or iss.startswith("unsupported_negative_assertion")
             or iss.startswith("unsupported_legal_conclusion")
-            or missing_terms_count >= 4
+            or severe_terms_gap
             or iss.startswith("unsupported_currentness_claim")
             or iss.startswith("unsupported_supersession_claim")
             or iss.startswith("unsupported_amendment_clause_modification")
