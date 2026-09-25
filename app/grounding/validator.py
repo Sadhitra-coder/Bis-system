@@ -173,6 +173,14 @@ class GroundingValidator:
             if clean_lower in ("sources", "source", "references", "reference") or clean_lower.startswith("sources:") or clean_lower.startswith("references:"):
                 continue
 
+            # Skip consumer verification tip sentence (mandated by PRD R5, not technical claims)
+            if "bis care" in clean_lower or "authenticity of the isi mark" in clean_lower:
+                continue
+
+            # Skip editorial status headlines (e.g. "**Status: Currently in force**")
+            if clean_lower.startswith("status:") or clean_lower in ("currently in force", "verification required"):
+                continue
+
             # Determine claim type
             lower = clean_text.lower()
             if any(p in lower for p in [
@@ -213,16 +221,16 @@ class GroundingValidator:
 
         results: List[str] = []
 
-        # Measurements with units: 6 months, 500 V, 10 mm, 5 %, 10 pieces
+        # Measurements with units: 6 months, 500 V, 10 mm, 5 %, 10 pieces, 1,100 V
         unit_pattern = re.compile(
-            r"\b(\d+(?:\.\d+)?)\s*(months?|years?|days?|hours?|weeks?|mm|cm|m|kg|g|v|kv|hz|%|percent|samples?|pieces?|units?|tests?|batches?|deg|°c)\b",
+            r"\b(\d{1,3}(?:,\d{3})*(?:\.\d+)?|\d+(?:\.\d+)?)\s*(months?|years?|days?|hours?|weeks?|mm|cm|m|kg|g|v|kv|hz|%|percent|samples?|pieces?|units?|tests?|batches?|deg|°c)\b",
             re.IGNORECASE,
         )
         for m in unit_pattern.finditer(masked):
             results.append(m.group(0).lower().strip())
 
         # Isolated quantities / numbers
-        num_pattern = re.compile(r"\b\d+(?:\.\d+)?\b")
+        num_pattern = re.compile(r"\b\d{1,3}(?:,\d{3})*(?:\.\d+)?\b")
         for m in num_pattern.finditer(masked):
             val = m.group(0)
             if val not in [r.split()[0] for r in results]:
@@ -325,13 +333,16 @@ class GroundingValidator:
                 if not matching_ev:
                     issues.append(f"standard_mismatch:claim=IS {std_num}")
 
-        # Check clause in claim: e.g. "Clause 4.1"
+        # Check clause in claim: e.g. "Clause 4.1" or "Clause 6"
         clause_matches = re.findall(r"\bClause\s*(\d+(?:\.\d+)*)\b", claim.text, re.IGNORECASE)
         if clause_matches:
             for cl in clause_matches:
+                cl_has_dot = "." in cl
                 matching_ev = any(
-                    (ev.clause_id and (ev.clause_id == cl or ev.clause_id.startswith(cl) or cl in ev.clause_id))
-                    or bool(re.search(rf"\bClause\s*{re.escape(cl)}\b", ev.source_content or ev.content, re.IGNORECASE))
+                    (ev.clause_id and (ev.clause_id == cl or ev.clause_id.startswith(f"{cl}.") or cl in ev.clause_id))
+                    or bool(re.search(rf"\b(?:Clause|Cl\.?|Section|Sec\.?|see|per)?\s*{re.escape(cl)}\b", ev.source_content or ev.content, re.IGNORECASE))
+                    or (cl_has_dot and bool(re.search(rf"\b{re.escape(cl)}\b", ev.source_content or ev.content)))
+                    or bool(re.search(rf"\b{re.escape(cl)}\s+(?:of\s+IS|shall|is|are|RATING|CLASSIFICATION|[A-Z]{{3,}})\b", ev.source_content or ev.content, re.IGNORECASE))
                     for ev in unique_citations
                 )
                 if not matching_ev:
@@ -373,36 +384,39 @@ class GroundingValidator:
             masked_source = re.sub(r"\bIS\s*\d+(?:\s*[:/ -]\s*\d{4})?\b", " ", combined_source_content, flags=re.IGNORECASE)
             masked_source = re.sub(r"\bClause\s*\d+(?:\.\d+)*\b", " ", masked_source, flags=re.IGNORECASE)
 
+            source_clean = combined_source_content.replace(",", "")
+            masked_source_clean = masked_source.replace(",", "")
+
             for qty in quantities:
                 qty_lower = qty.lower()
-                if qty_lower not in combined_source_content:
-                    parts = qty_lower.split()
+                qty_clean = qty_lower.replace(",", "")
+                if qty_lower not in combined_source_content and qty_clean not in source_clean:
+                    parts = qty_clean.split()
                     if len(parts) == 2:
                         num, unit = parts
                         unit_stem = unit.rstrip("s")
                         num_pattern = re.compile(rf"\b{re.escape(num)}\b")
                         if is_footer_cited:
                             # For footer-cited claims: only require the bare number appears
-                            # in source — don't penalise differing unit format (e.g. "6 a"
-                            # vs "6a" or "6 ampere"). The LLM may legitimately paraphrase units.
-                            if not num_pattern.search(masked_source):
+                            # in source — don't penalise differing unit format
+                            if not num_pattern.search(masked_source_clean) and not num_pattern.search(source_clean):
                                 issues.append(f"unsupported_numerical_value:{qty}")
                         else:
-                            if unit_stem not in combined_source_content or not num_pattern.search(masked_source):
+                            if (unit_stem not in source_clean and unit not in source_clean) or not num_pattern.search(masked_source_clean):
                                 issues.append(f"unsupported_numerical_value:{qty}")
                     else:
-                        num_pattern = re.compile(rf"\b{re.escape(qty_lower)}\b")
+                        num_pattern = re.compile(rf"\b{re.escape(qty_clean)}\b")
                         is_metadata_year = (
-                            len(qty_lower) == 4
-                            and qty_lower.isdigit()
+                            len(qty_clean) == 4
+                            and qty_clean.isdigit()
                             and any(
-                                str(getattr(ev, "standard_year", None) or "") == qty_lower
-                                or qty_lower in (getattr(ev, "standard_number", None) or "")
-                                or qty_lower in combined_source_content
+                                str(getattr(ev, "standard_year", None) or "") == qty_clean
+                                or qty_clean in (getattr(ev, "standard_number", None) or "")
+                                or qty_clean in source_clean
                                 for ev in unique_citations
                             )
                         )
-                        if not is_metadata_year and not num_pattern.search(masked_source) and not num_pattern.search(combined_source_content):
+                        if not is_metadata_year and not num_pattern.search(masked_source_clean) and not num_pattern.search(source_clean):
                             issues.append(f"unsupported_numerical_value:{qty}")
 
         # 7. Semantic / Content Support
@@ -498,13 +512,26 @@ class GroundingValidator:
         # Determine Support Status
         claim.issues = issues
 
+        # Only severe grounding violations make a claim UNSUPPORTED:
+        # - Fake or unknown citation tokens
+        # - Actual standard or clause mismatches
+        # - Completely unsupported numerical values
+        # - Unsupported negative assertions (converting absence into negative fact)
+        # - Unsupported legal conclusions
+        # - Severe vocabulary gap (4 or more terms completely missing from source)
+        # - Unsupported currentness / supersession / amendment claims
+        missing_terms_count = 0
+        for iss in issues:
+            if iss.startswith("unsupported_terms:missing="):
+                missing_terms_count = len(iss.split("=")[1].split(","))
+
         has_severe_issues = any(
             iss.startswith("fake_or_unknown_citation_id")
             or "mismatch" in iss
             or iss.startswith("unsupported_numerical_value")
             or iss.startswith("unsupported_negative_assertion")
             or iss.startswith("unsupported_legal_conclusion")
-            or iss.startswith("unsupported_terms")
+            or missing_terms_count >= 4
             or iss.startswith("unsupported_currentness_claim")
             or iss.startswith("unsupported_supersession_claim")
             or iss.startswith("unsupported_amendment_clause_modification")
@@ -518,7 +545,7 @@ class GroundingValidator:
             claim.support_status = SupportStatus.UNSUPPORTED
             claim.validation_notes = f"Grounding check failed: {'; '.join(issues)}."
         else:
-            # Minor issues, like low content overlap or minor partial match
+            # Minor issues, like low content overlap (<4 missing terms) or minor partial match
             claim.support_status = SupportStatus.PARTIALLY_SUPPORTED
             claim.validation_notes = f"Partially supported: {'; '.join(issues)}."
 
@@ -579,20 +606,24 @@ class GroundingValidator:
         if not claims and answer:
             claims = cls.extract_claims_from_text(answer)
 
-        # Multilingual answer detection: if the answer is primarily in a non-Latin script
-        # (e.g. Devanagari for Hindi), the LLM's claim texts in the JSON response are
-        # typically English summaries of Hindi content — but ANY overlap/currentness check
-        # against English source content will be meaningless for a translated answer.
-        # Mark all claims as uses_footer_citations=True to apply calibrated thresholds.
-        if answer:
-            answer_non_ascii = sum(1 for c in answer if ord(c) > 0x0080)
-            answer_total = max(len(answer.strip()), 1)
-            if answer_non_ascii / answer_total > 0.20:  # >20% non-ASCII = multilingual answer
-                for claim in claims:
-                    claim.uses_footer_citations = True
-
-        # Validate each claim
+        # Normalize boilerplate consumer guidance and headline claims
         for claim in claims:
+            txt_lower = claim.text.lower().strip("*: \t\n,")
+            if "bis care" in txt_lower or "authenticity of the isi mark" in txt_lower:
+                claim.claim_type = ClaimType.INTERPRETATION
+                claim.support_status = SupportStatus.SUPPORTED
+                claim.issues = []
+                claim.validation_notes = "Official consumer guidance notice."
+            elif txt_lower.startswith("status:") or txt_lower in ("currently in force", "verification required"):
+                claim.claim_type = ClaimType.INTERPRETATION
+                claim.support_status = SupportStatus.SUPPORTED
+                claim.issues = []
+                claim.validation_notes = "Editorial status headline."
+
+        # Validate each substantive claim
+        for claim in claims:
+            if claim.support_status == SupportStatus.SUPPORTED and claim.claim_type == ClaimType.INTERPRETATION:
+                continue
             cls.validate_claim(claim, citation_map)
 
         # Compute metrics

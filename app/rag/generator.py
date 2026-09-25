@@ -284,7 +284,7 @@ Your target audience is a compliance manager, testing engineer, or regulatory of
 2. Maintain formal engineering and regulatory precision.
 """
 
-        return f"""You are BIS-AI, an expert compliance assistant for Indian Standards published by the Bureau of Indian Standards (BIS).
+        prompt_body = f"""You are BIS-AI, an expert compliance assistant for Indian Standards published by the Bureau of Indian Standards (BIS).
 
 Your most vital responsibility is FACTUAL ACCURACY and GROUNDEDNESS.
 You must answer using ONLY the retrieved documentation provided in the prompt context.
@@ -315,8 +315,8 @@ Structure your answer in clean markdown with clear visual hierarchy following th
 
 3. STRUCTURED DETAILS (CLEAN SHORT BULLETS OR NUMBERED LIST):
    Where there are multiple distinct facts (such as technical specifications, test methods, version timeline, or amendments), format them as a clean, short bulleted or numbered list. NEVER cram multiple distinct requirements or timeline events into a single dense paragraph.
-   - For version queries: list the current edition/year, superseded edition details, and published amendments.
-   - For technical queries: list each key requirement, test method, or parameter.
+   - For version/currentness queries: list the current edition/year, superseded edition details, and published amendments.
+   - For factual, technical, or scope queries: list each key requirement, test method, or parameter. Do NOT speculate or invent supersession/amendment history for general scope queries.
 
 4. SEPARATED CITATION SOURCES LINE AT THE VERY END:
    Place citations as a clearly separated "Sources:" line at the very end of your response, NOT scattered inline as [EV1][EV2] mid-sentence.
@@ -337,12 +337,29 @@ Structure your answer in clean markdown with clear visual hierarchy following th
 JSON OUTPUT SCHEMA
 ==================================================
 You must format your entire response as a valid JSON object matching this schema:
+"""
+        if mode == "consumer":
+            return f"""{prompt_body}
 {{
-  "answer": "**Status: Currently in force**\\n\\nIS 1293 is active and in force as the Fourth Revision published in 2019. It establishes safety and design requirements for plugs and socket-outlets for domestic use.\\n\\n- Edition: Fourth Revision (2019), effective December 1, 2019\\n- Supersedes: IS 1293:2005 (Third Revision), withdrawn October 23, 2020\\n- Amendments: Amendment No. 1 (effective Dec 2020) and Amendment No. 2 (effective Sept 25, 2023)\\n\\nSources: [EV1], [EV2]",
+  "answer": "**Plugs and socket-outlets under IS 1293 ensure household electrical safety.**\\n\\nIS 1293 specifies safety and quality standards for domestic plugs and socket-outlets. These standards ensure that electrical connections in homes protect users from shock and fire hazards.\\n\\n- Protection from Electric Shock: Outlets must be constructed so that live parts cannot be touched accidentally.\\n- Durable Construction: Plugs and sockets must withstand repeated use and mechanical stress without degrading.\\n- Safe Earthing: Proper earthing contacts must engage first to safely discharge any electrical faults.\\n\\nConsumers can verify the authenticity of the ISI mark or license validity using the official BIS Care mobile app.\\n\\nSources: [EV1], [EV2]",
   "claims": [
     {{
       "claim_id": "C1",
-      "text": "Exact factual claim directly supported by cited evidence",
+      "text": "IS 1293 specifies safety and quality standards for domestic plugs and socket-outlets.",
+      "claim_type": "fact",
+      "citation_ids": ["EV1"]
+    }}
+  ]
+}}
+"""
+        else:
+            return f"""{prompt_body}
+{{
+  "answer": "**IS 694 specifies requirements for PVC insulated cables up to 1100 V.**\\n\\nIS 694 covers PVC insulated cables suitable for electric power and lighting up to and including 1100 V. The standard specifies conductor materials, insulation properties, and rigorous safety tests.\\n\\n- Voltage Rating: Suitable for voltages up to and including 1100 V.\\n- Conductor Quality: High-conductivity copper or aluminum conductors.\\n- Insulation & Sheath: Polyvinyl chloride (PVC) compound meeting electrical and thermal test criteria.\\n\\nSources: [EV1], [EV2]",
+  "claims": [
+    {{
+      "claim_id": "C1",
+      "text": "IS 694 covers PVC insulated cables suitable for electric power and lighting up to and including 1100 V.",
       "claim_type": "fact",
       "citation_ids": ["EV1"]
     }}
@@ -481,6 +498,7 @@ REQUIRED ANSWER STRUCTURE & FORMAT
   4. Citations ONLY in a clearly separated "Sources: [EV1], [EV2]" line at the very end, NOT scattered inline mid-sentence.
 - Associate each factual claim in the "claims" list with its supporting evidence token (e.g. "citation_ids": ["EV1"]).
 - Do not invent missing information.
+- For general factual, scope, or requirements queries, open with a direct bold answer headline and list the key technical specifications or requirements. Do NOT speculate or invent supersession history, previous editions, or withdrawal dates unless explicitly present in the retrieved excerpts.
 {audience_instruction}
 - Format your entire output as a valid JSON object matching:
 {{
