@@ -9,7 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased] - 2026-09-25
 
-### Added
+### Fixed
+- **Grounding Validation & Cross-Lingual Calibration** (`dd2ab1a`, `496d1c9`, `2abcbca`, `5bf2126`, `6af5151`):
+  - Corrected SQLite column lookup (`standard_title` instead of non-existent `title`) in `_get_standard_title()`, restoring official title enrichment for standards like `IS 694`.
+  - Added table clause pattern matching (`\b\d+\.\d+(?:\.\d+)*\b`) allowing section references like `7.1.1` without literal `Clause` prefix to match correctly against evidence chunks.
+  - Enhanced numeric extraction to parse comma-separated quantities (`1,100 V` normalized to `1100 V`).
+  - Calibrated entity-aware terms gap checks so plain-language consumer mode summaries do not trigger false ungrounded abstentions.
+  - Implemented script detection in `validate()` to skip Latin numerical and morphological checks on Devanagari Hindi text while preserving standard numbers (`IS 1293`) and citations (`[EV1]`).
+
+### Documentation
+- **PRD R1–R8 Traceability Matrix Realignment**:
+  - Overwrote outdated requirement numbering in `README.md` to strictly reflect the 8 official PRD requirements (R1 to R8) with live verified metrics (`chunks_indexed: 479`).
 - **PRD R4 Certification Process Explanation & Checklist** (`f6c024b`):
   - Built 5-stage conformity assessment roadmap in `app/certification/process.py`:
     1. Application & Documentation Submission (Manakonline)
