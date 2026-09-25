@@ -271,6 +271,7 @@ Your target audience is a general consumer or product buyer:
 4. At the very end of your response, include this exact sentence as a separate concluding line:
    "Consumers can verify the authenticity of the ISI mark or license validity using the official BIS Care mobile app."
    (Do NOT attach an [EV] citation tag to this BIS Care app tip, and do NOT include it as a factual claim in the "claims" list.)
+5. Maintain strict grounding fidelity to the cited passages: use words and concepts directly present in the source text without inventing unsupported generalizations.
 """
         else:
             audience_block = """

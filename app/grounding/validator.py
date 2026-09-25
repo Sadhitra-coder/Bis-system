@@ -39,13 +39,17 @@ _STOPWORDS = {
 
 # Domain framing and structural words for technical regulatory prose
 _DOMAIN_FRAMING_WORDS = {
-    "requirement", "requirements", "standard", "standards", "include", "includes", "including",
+    "requirement", "requirements", "standard", "standards", "include", "includes", "included", "including",
     "specification", "specifications", "provision", "provisions", "quality", "assurance",
-    "overview", "various", "general", "compliance", "applies", "applicable", "following",
-    "details", "outlined", "accordance", "relevant", "stated", "provides", "provided",
+    "overview", "various", "general", "compliance", "compliant", "applies", "applicable", "following",
+    "details", "outlined", "accordance", "relevant", "stated", "provides", "provided", "providing",
     "guidelines", "procedure", "procedures", "ensuring", "ensure", "ensures", "conducted",
     "conduct", "per", "covered", "covers", "covering", "related", "relates", "relating",
     "clause", "clauses", "section", "sections", "table", "tables", "part", "parts",
+    "proper", "properly", "mechanism", "mechanisms", "feature", "features", "manner",
+    "used", "using", "uses", "use", "meet", "meets", "meeting", "met", "safe", "safety",
+    "system", "systems", "types", "type", "method", "methods", "rules", "rule", "item", "items",
+    "exist", "exists", "aspect", "aspects", "clear", "confirmed", "confirm", "confirms",
 }
 
 # Number words to digit mapping
@@ -64,6 +68,8 @@ def _stem(w: str) -> str:
         if len(w) > len(suffix) + 2 and w.endswith(suffix):
             return w[:-len(suffix)]
     return w
+
+_DOMAIN_FRAMING_STEMS = {_stem(w) for w in _DOMAIN_FRAMING_WORDS}
 
 # Negative assertion phrases that convert absence of evidence into negative domain facts
 _NEGATIVE_ASSERTION_PATTERNS = [
@@ -353,7 +359,10 @@ class GroundingValidator:
 
         # 7. Semantic / Content Support
         # Check token overlap between claim and cited source_content
-        claim_words = set(re.findall(r"\b[a-zA-Z]{3,}\b", claim.text.lower())) - _STOPWORDS - _DOMAIN_FRAMING_WORDS
+        claim_words = {
+            w for w in re.findall(r"\b[a-zA-Z]{3,}\b", claim.text.lower())
+            if w not in _STOPWORDS and w not in _DOMAIN_FRAMING_WORDS and _stem(w) not in _DOMAIN_FRAMING_STEMS
+        }
         if claim_words:
             source_words = set(re.findall(r"\b[a-zA-Z]{3,}\b", combined_source_content))
             source_stems = {_stem(w) for w in source_words}
