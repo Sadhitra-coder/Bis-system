@@ -40,7 +40,9 @@ class QueryIntentType(str, Enum):
     REFERENCE_LOOKUP = "REFERENCE_LOOKUP"                   # e.g. "normative references in IS 3055"
     EXPLANATION_QUERY = "EXPLANATION_QUERY"                 # e.g. "what does permissible error mean?"
     COMPARISON_QUERY = "COMPARISON_QUERY"                   # e.g. "difference between 2020 and 2024 editions"
-    GENERAL_INFORMATION = "GENERAL_INFORMATION"             # e.g. "how does BIS certification work?"
+    GENERAL_INFORMATION = "GENERAL_INFORMATION"             # e.g. "what is BIS?"
+    SCHEME_GUIDANCE = "SCHEME_GUIDANCE"                     # e.g. "which certification scheme applies for toys / IS 9873"
+    PROCESS_EXPLANATION = "PROCESS_EXPLANATION"             # e.g. "how do I get certification for toys under IS 9873"
     AMBIGUOUS_QUERY = "AMBIGUOUS_QUERY"                     # e.g. "lity", "thermometers", vague queries
 
 

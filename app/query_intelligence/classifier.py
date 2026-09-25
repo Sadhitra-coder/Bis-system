@@ -91,12 +91,35 @@ _REQUIREMENT_DISCOVERY_PATTERN = re.compile(
     re.IGNORECASE
 )
 
-# 8. General information: "what is BIS", "how does certification work"
+# 8. Scheme guidance: "which scheme applies", "what certification scheme", "scheme for toys"
+_SCHEME_GUIDANCE_PATTERN = re.compile(
+    r'\b(?:which\s+(?:certification\s+)?scheme|what\s+(?:certification\s+)?scheme|'
+    r'scheme\s+(?:applies|applicable|governs|required)|'
+    r'applicable\s+(?:certification\s+)?scheme|'
+    r'scheme\s+i\b|scheme\s+ii\b|scheme\s+iv\b|scheme\s+x\b|'
+    r'isi\s+or\s+crs|crs\s+or\s+isi|fmcs\s+route|hallmarking\s+scheme|'
+    r'certification\s+scheme\s+(?:for|under))\b',
+    re.IGNORECASE
+)
+
+# 9. Process explanation / checklist: "how do I get certification", "steps for certification", "how to get certified"
+_PROCESS_EXPLANATION_PATTERN = re.compile(
+    r'\b(?:how\s+(?:do\s+i|can\s+i|to)\s+(?:get|obtain|apply\s+for)\s+(?:bis\s+)?(?:certification|license|licence|cml|isi\s+mark)|'
+    r'how\s+(?:do\s+i|can\s+i|to)\s+get\s+certified|'
+    r'certification\s+process|certification\s+procedure|certification\s+journey|'
+    r'steps\s+(?:to|for)\s+(?:certification|bis\s+license|get\s+certified)|'
+    r'procedure\s+(?:to|for)\s+(?:get|obtain)\s+certification|'
+    r'certification\s+checklist|how\s+to\s+get\s+isi|process\s+for\s+getting\s+isi|'
+    r'(?:step\s+by\s+step\s+)?process\s+(?:to|for)\s+(?:get\s+certified|obtain\s+certification|certification))\b',
+    re.IGNORECASE
+)
+
+# 10. General information: "what is BIS", "overview of BIS"
 _GENERAL_INFO_PATTERN = re.compile(
     r'\b(?:what\s+is\s+(?:the\s+)?(?:bis|bureau\s+of\s+indian\s+standards)|'
-    r'how\s+does\s+bis\s+(?:work|operate)|how\s+to\s+get\s+isi|overview\s+of\s+bis|about\s+bis|'
+    r'how\s+does\s+bis\s+(?:work|operate)|overview\s+of\s+bis|about\s+bis|'
     r'role\s+and\s+organizational\s+function|functions?\s+of\s+(?:the\s+)?(?:bis|bureau)|'
-    r'bureau\s+of\s+indian\s+standards\s+and\s+its\s+functions?|certification\s+process)\b',
+    r'bureau\s+of\s+indian\s+standards\s+and\s+its\s+functions?)\b',
     re.IGNORECASE
 )
 
@@ -253,6 +276,16 @@ def classify_intent_deterministic(
         cand_map[QueryIntentType.REQUIREMENT_DISCOVERY] = req_conf
         signals.append("keyword:requirement_discovery")
 
+    has_scheme_guidance = bool(_SCHEME_GUIDANCE_PATTERN.search(norm_q))
+    if has_scheme_guidance:
+        cand_map[QueryIntentType.SCHEME_GUIDANCE] = 0.96
+        signals.append("keyword:scheme_guidance")
+
+    has_process_explanation = bool(_PROCESS_EXPLANATION_PATTERN.search(norm_q))
+    if has_process_explanation:
+        cand_map[QueryIntentType.PROCESS_EXPLANATION] = 0.96
+        signals.append("keyword:process_explanation")
+
     has_general_info = bool(
         _GENERAL_INFO_PATTERN.search(norm_q)
         or _HINDI_GENERAL_INFO_PATTERN.search(norm_q)
@@ -272,6 +305,14 @@ def classify_intent_deterministic(
         primary_intent = QueryIntentType.COMPARISON_QUERY
         primary_confidence = 0.90
         primary_reasoning = "Inquiry comparing multiple standards, editions, or requirements."
+    elif has_scheme_guidance:
+        primary_intent = QueryIntentType.SCHEME_GUIDANCE
+        primary_confidence = 0.96
+        primary_reasoning = "Inquiry seeking guidance on applicable BIS certification scheme."
+    elif has_process_explanation:
+        primary_intent = QueryIntentType.PROCESS_EXPLANATION
+        primary_confidence = 0.96
+        primary_reasoning = "Inquiry seeking structured steps and process for obtaining BIS certification."
     elif has_std_discovery:
         primary_intent = QueryIntentType.STANDARD_DISCOVERY
         primary_confidence = 0.95
