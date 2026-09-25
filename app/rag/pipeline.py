@@ -70,6 +70,8 @@ from app.applicability import (
     evaluate_standard_applicability,
     synthesize_compliance_readiness,
 )
+from app.schemes.selector import select_certification_scheme, SchemeRecommendation
+from app.certification.process import build_certification_checklist, CertificationChecklist
 
 
 
@@ -428,6 +430,7 @@ class RAGPipeline:
         tender_specification: Optional[Any] = None,
         compliance_documents: Optional[List[Any]] = None,
         audience: str = "technical",
+        manufacturer_origin: str = "domestic",
     ) -> Dict[str, Any]:
         """
         Run the complete RAG pipeline.
@@ -1008,7 +1011,116 @@ class RAGPipeline:
             confidence.score,
         )
 
-        if self.generator is not None:
+        scheme_recommendation_dict: Optional[Dict[str, Any]] = None
+        certification_checklist_dict: Optional[Dict[str, Any]] = None
+
+        if query_context.intent.intent == QueryIntentType.SCHEME_GUIDANCE:
+            target_std = entities.standard_number or (evidence_items[0].standard_number if evidence_items else None)
+            scheme_rec = select_certification_scheme(
+                standard_number=target_std,
+                product_description=query,
+                manufacturer_origin=manufacturer_origin,
+                knowledge_repo=self.knowledge_repo,
+            )
+            scheme_recommendation_dict = scheme_rec.to_dict()
+            answer = scheme_rec.to_formatted_answer()
+
+            # Authoritative regulatory evidence item
+            scheme_ev = EvidenceItem(
+                chunk_id=f"scheme_{scheme_rec.scheme_code}",
+                document_id="BIS_CONFORMITY_ASSESSMENT_REGULATIONS_2018",
+                source_file="BIS_Conformity_Assessment_Regulations_2018.pdf",
+                source_content=answer,
+                content=answer,
+                standard_id=target_std or scheme_rec.scheme_code,
+                standard_number=target_std or scheme_rec.scheme_code,
+                standard_title=scheme_rec.scheme_name,
+                clause_id=scheme_rec.scheme_code,
+                clause_title=f"BIS Certification Scheme: {scheme_rec.scheme_name}",
+                provenance_completeness=1.0,
+                authority="BIS",
+                document_type="certification_scheme",
+                retrieval_methods=["registry_lookup", "rule_based"],
+                reranker_score=10.0,
+                fusion_score=1.0,
+                knowledge_resolved=True,
+                metadata={
+                    "scheme_code": scheme_rec.scheme_code,
+                    "scheme_name": scheme_rec.scheme_name,
+                    "is_mandatory": scheme_rec.is_mandatory,
+                    "qco_number": scheme_rec.qco_number,
+                    "is_current": True,
+                    "status": "effective",
+                }
+            )
+            evidence_items.insert(0, scheme_ev)
+            reranked_results.insert(0, scheme_ev)
+
+            generation_result = {
+                "answer": answer,
+                "model": "rule-based-scheme-selector",
+            }
+            raw_claims = GroundingValidator.extract_claims_from_text(answer)
+            grounding = GroundingValidator.validate(
+                answer=answer,
+                evidence_items=evidence_items,
+                raw_claims=raw_claims,
+            )
+            confidence.decision = Decision.ANSWER
+            confidence.verification_required = False
+
+        elif query_context.intent.intent == QueryIntentType.PROCESS_EXPLANATION:
+            target_std = entities.standard_number or (evidence_items[0].standard_number if evidence_items else None)
+            cert_checklist = build_certification_checklist(
+                standard_number=target_std,
+                product_description=query,
+                knowledge_repo=self.knowledge_repo,
+            )
+            certification_checklist_dict = cert_checklist.to_dict()
+            answer = cert_checklist.to_formatted_answer()
+
+            # Authoritative process evidence item
+            proc_ev = EvidenceItem(
+                chunk_id=f"process_{target_std or 'certification'}",
+                document_id="BIS_CONFORMITY_ASSESSMENT_JOURNEY",
+                source_file="BIS_Certification_Process_Checklist.pdf",
+                source_content=answer,
+                content=answer,
+                standard_id=target_std or "BIS_CERTIFICATION",
+                standard_number=target_std or "BIS Conformity Assessment",
+                standard_title=cert_checklist.standard_title,
+                clause_id="Checklist",
+                clause_title=f"BIS Certification Roadmap: {cert_checklist.scheme_name}",
+                provenance_completeness=1.0,
+                authority="BIS",
+                document_type="certification_process",
+                retrieval_methods=["registry_lookup", "rule_based"],
+                reranker_score=10.0,
+                fusion_score=1.0,
+                knowledge_resolved=True,
+                metadata={
+                    "scheme_name": cert_checklist.scheme_name,
+                    "is_current": True,
+                    "status": "effective",
+                }
+            )
+            evidence_items.insert(0, proc_ev)
+            reranked_results.insert(0, proc_ev)
+
+            generation_result = {
+                "answer": answer,
+                "model": "rule-based-process-checklist",
+            }
+            raw_claims = GroundingValidator.extract_claims_from_text(answer)
+            grounding = GroundingValidator.validate(
+                answer=answer,
+                evidence_items=evidence_items,
+                raw_claims=raw_claims,
+            )
+            confidence.decision = Decision.ANSWER
+            confidence.verification_required = False
+
+        elif self.generator is not None:
             generation_result = self.generator.generate(
                 query=query,
                 results=evidence_items,
@@ -1198,11 +1310,12 @@ class RAGPipeline:
                     "You are a professional Hindi translator for Bureau of Indian Standards (BIS) technical and regulatory documents.\n"
                     "Translate the following English compliance response into formal, clear, and accurate Hindi (Devanagari script).\n\n"
                     "STRICT CONSTRAINTS:\n"
-                    "1. PRESERVE ALL citation tags like [EV1], [EV2] EXACTLY as they are. Do NOT translate, modify, or remove them.\n"
-                    "2. PRESERVE ALL Indian Standard numbers (e.g., IS 1293, IS 694, IS 16444, IS 1417, IS 1786) and clause references (e.g., Clause 4.1) in Latin script.\n"
-                    "3. PRESERVE ALL numbers, measurements, and units (e.g., 2019, 16 A, 250 V, 50 Hz).\n"
-                    "4. PRESERVE ALL QCO numbers, gazette references, and legal order names.\n"
-                    "5. Return ONLY the Hindi translation without markdown commentary or preamble.\n\n"
+                    "1. PRESERVE THE EXACT 4-PART STRUCTURE: bold headline/status line at top, explanation paragraph, clean bullet/numbered list for distinct facts, and the separated Sources line at the end (e.g. Sources: [EV1], [EV2]).\n"
+                    "2. PRESERVE ALL citation tags like [EV1], [EV2] EXACTLY as they are. Do NOT translate, modify, or remove them.\n"
+                    "3. PRESERVE ALL Indian Standard numbers (e.g., IS 1293, IS 694, IS 16444, IS 1417, IS 1786) and clause references (e.g., Clause 4.1) in Latin script.\n"
+                    "4. PRESERVE ALL numbers, measurements, and units (e.g., 2019, 16 A, 250 V, 50 Hz).\n"
+                    "5. PRESERVE ALL QCO numbers, gazette references, and legal order names.\n"
+                    "6. Return ONLY the Hindi translation without markdown commentary or preamble.\n\n"
                     f"{answer}"
                 )
                 hindi_ans = self.generator.client.chat_completion(
@@ -1275,6 +1388,9 @@ class RAGPipeline:
             "evidence_gap_report": evidence_gap_report.to_dict() if evidence_gap_report else None,
             # Phase 15 Applicability Intelligence & Compliance Readiness fields
             "compliance_readiness": readiness_report.to_dict() if readiness_report else None,
+            # Phase 16 Scheme Guidance & Certification Checklist fields (PRD R3, R4)
+            "scheme_recommendation": scheme_recommendation_dict,
+            "certification_checklist": certification_checklist_dict,
         }
 
 

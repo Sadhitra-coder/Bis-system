@@ -87,6 +87,7 @@ class Settings(BaseSettings):
     PROJECT_NAME: str = "BIS RAG Engine"
     APP_ENV: str = "development"
     LOG_LEVEL: str = "INFO"
+    SQLITE_DB_PATH: Path = DATA_DIR / "knowledge" / "bis_knowledge.db"
 
     # ---------------- Service-to-Service Security ----------------
     INTERNAL_SERVICE_KEY: Optional[str] = "complywise-internal-bis-key-default"

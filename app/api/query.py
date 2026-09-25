@@ -130,6 +130,8 @@ def query_documents(payload: QueryRequest, request: Request):
             kwargs["compliance_documents"] = payload.compliance_documents
         if payload.audience is not None:
             kwargs["audience"] = payload.audience
+        if payload.manufacturer_origin is not None:
+            kwargs["manufacturer_origin"] = payload.manufacturer_origin
 
         if top_k is None:
             result = rag_pipeline.query(payload.query, **kwargs)
@@ -153,6 +155,8 @@ def query_documents(payload: QueryRequest, request: Request):
             model=result.get("model"),
             language=result.get("language", "en"),
             laboratories=result.get("laboratories"),
+            scheme_recommendation=result.get("scheme_recommendation"),
+            certification_checklist=result.get("certification_checklist"),
             confidence_score=result.get("confidence_score"),
             confidence_level=result.get("confidence_level"),
             decision=result.get("decision"),

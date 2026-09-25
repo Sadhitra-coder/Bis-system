@@ -366,6 +366,7 @@ class QueryRequest(BaseModel):
     # Phase 14 Compliance & Business Documents fields
     compliance_documents: Optional[List[Dict[str, Any]]] = None
     audience: Optional[str] = "technical"
+    manufacturer_origin: Optional[str] = "domestic"
 
 
 class QueryResponse(BaseModel):
@@ -382,6 +383,8 @@ class QueryResponse(BaseModel):
     model: Optional[str] = None
     language: Optional[str] = "en"
     laboratories: Optional[List[Dict[str, Any]]] = None
+    scheme_recommendation: Optional[Dict[str, Any]] = None
+    certification_checklist: Optional[Dict[str, Any]] = None
     # Phase 7 Evidence & Confidence fields
     confidence_score: Optional[float] = None
     confidence_level: Optional[str] = None
