@@ -93,7 +93,7 @@ def _get_standard_title(standard_number: str) -> str:
             db_path = "data/knowledge/bis_knowledge.db"
         conn = sqlite3.connect(db_path, timeout=5.0)
         c = conn.cursor()
-        c.execute("SELECT title FROM standards WHERE standard_number = ? LIMIT 1", (std_clean,))
+        c.execute("SELECT standard_title FROM standards WHERE standard_number = ? LIMIT 1", (std_clean,))
         row = c.fetchone()
         conn.close()
         if row and row[0]:
