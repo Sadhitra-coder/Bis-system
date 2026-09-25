@@ -453,11 +453,23 @@ class GroundingValidator:
                 meta = getattr(ev, "metadata", {}) or {}
                 text = (ev.source_content or ev.content).lower()
                 # Explicit supersession / in force statements in text
-                if any(w in text for w in ["supersedes", "comes into force", "effective from", "stands current", "hereby notified"]):
+                if any(w in text for w in [
+                    "supersedes", "comes into force", "effective from",
+                    "stands current", "hereby notified",
+                    # Revision/edition language that establishes the document's currentness
+                    "fourth revision", "third revision", "second revision", "first revision",
+                    "latest revision", "latest edition", "current edition",
+                    "this standard supersedes", "in supersession",
+                ]):
                     has_temporal_proof = True
                     break
                 # Explicit database or metadata validation
-                if meta.get("is_current") is True or meta.get("status") == "effective":
+                if meta.get("is_current") is True or meta.get("status") in ("effective", "current", "in_force"):
+                    has_temporal_proof = True
+                    break
+                # If the standard's own publication year appears in the evidence, treat as current
+                std_year = str(getattr(ev, "standard_year", None) or "")
+                if std_year and std_year in text and any(w in text for w in ["revision", "edition", "published", "issued"]):
                     has_temporal_proof = True
                     break
             if not has_temporal_proof:
@@ -566,6 +578,18 @@ class GroundingValidator:
 
         if not claims and answer:
             claims = cls.extract_claims_from_text(answer)
+
+        # Multilingual answer detection: if the answer is primarily in a non-Latin script
+        # (e.g. Devanagari for Hindi), the LLM's claim texts in the JSON response are
+        # typically English summaries of Hindi content — but ANY overlap/currentness check
+        # against English source content will be meaningless for a translated answer.
+        # Mark all claims as uses_footer_citations=True to apply calibrated thresholds.
+        if answer:
+            answer_non_ascii = sum(1 for c in answer if ord(c) > 0x0080)
+            answer_total = max(len(answer.strip()), 1)
+            if answer_non_ascii / answer_total > 0.20:  # >20% non-ASCII = multilingual answer
+                for claim in claims:
+                    claim.uses_footer_citations = True
 
         # Validate each claim
         for claim in claims:
