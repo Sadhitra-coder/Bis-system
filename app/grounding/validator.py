@@ -357,46 +357,64 @@ class GroundingValidator:
                     issues.append(f"amendment_mismatch:claim=Amendment {amd}")
 
         # 6. Numerical / Date / Quantity validation (Section 12)
-        # Source text must support numbers
-        quantities = cls.extract_numbers_and_quantities(claim.text)
+        # Source text must support numbers.
+        # Cross-lingual detection: if the claim contains primarily non-Latin (e.g. Devanagari)
+        # characters, numerical and overlap checks against English source content are not
+        # meaningful — skip them to prevent false positives on multilingual answers.
         combined_source_content = " ".join((ev.source_content or ev.content).lower() for ev in unique_citations)
-        masked_source = re.sub(r"\bIS\s*\d+(?:\s*[:/ -]\s*\d{4})?\b", " ", combined_source_content, flags=re.IGNORECASE)
-        masked_source = re.sub(r"\bClause\s*\d+(?:\.\d+)*\b", " ", masked_source, flags=re.IGNORECASE)
+        non_ascii_chars = sum(1 for c in claim.text if ord(c) > 0x0080)
+        total_chars = max(len(claim.text.strip()), 1)
+        is_non_latin_claim = non_ascii_chars / total_chars > 0.30  # >30% non-ASCII = multilingual
 
-        for qty in quantities:
-            qty_lower = qty.lower()
-            if qty_lower not in combined_source_content:
-                parts = qty_lower.split()
-                if len(parts) == 2:
-                    num, unit = parts
-                    unit_stem = unit.rstrip("s")
-                    num_pattern = re.compile(rf"\b{re.escape(num)}\b")
-                    if unit_stem not in combined_source_content or not num_pattern.search(masked_source):
-                        issues.append(f"unsupported_numerical_value:{qty}")
-                else:
-                    num_pattern = re.compile(rf"\b{re.escape(qty_lower)}\b")
-                    is_metadata_year = (
-                        len(qty_lower) == 4
-                        and qty_lower.isdigit()
-                        and any(
-                            str(getattr(ev, "standard_year", None) or "") == qty_lower
-                            or qty_lower in (getattr(ev, "standard_number", None) or "")
-                            or qty_lower in combined_source_content
-                            for ev in unique_citations
+        is_footer_cited = getattr(claim, "uses_footer_citations", False)
+
+        if not is_non_latin_claim:
+            quantities = cls.extract_numbers_and_quantities(claim.text)
+            masked_source = re.sub(r"\bIS\s*\d+(?:\s*[:/ -]\s*\d{4})?\b", " ", combined_source_content, flags=re.IGNORECASE)
+            masked_source = re.sub(r"\bClause\s*\d+(?:\.\d+)*\b", " ", masked_source, flags=re.IGNORECASE)
+
+            for qty in quantities:
+                qty_lower = qty.lower()
+                if qty_lower not in combined_source_content:
+                    parts = qty_lower.split()
+                    if len(parts) == 2:
+                        num, unit = parts
+                        unit_stem = unit.rstrip("s")
+                        num_pattern = re.compile(rf"\b{re.escape(num)}\b")
+                        if is_footer_cited:
+                            # For footer-cited claims: only require the bare number appears
+                            # in source — don't penalise differing unit format (e.g. "6 a"
+                            # vs "6a" or "6 ampere"). The LLM may legitimately paraphrase units.
+                            if not num_pattern.search(masked_source):
+                                issues.append(f"unsupported_numerical_value:{qty}")
+                        else:
+                            if unit_stem not in combined_source_content or not num_pattern.search(masked_source):
+                                issues.append(f"unsupported_numerical_value:{qty}")
+                    else:
+                        num_pattern = re.compile(rf"\b{re.escape(qty_lower)}\b")
+                        is_metadata_year = (
+                            len(qty_lower) == 4
+                            and qty_lower.isdigit()
+                            and any(
+                                str(getattr(ev, "standard_year", None) or "") == qty_lower
+                                or qty_lower in (getattr(ev, "standard_number", None) or "")
+                                or qty_lower in combined_source_content
+                                for ev in unique_citations
+                            )
                         )
-                    )
-                    if not is_metadata_year and not num_pattern.search(masked_source) and not num_pattern.search(combined_source_content):
-                        issues.append(f"unsupported_numerical_value:{qty}")
+                        if not is_metadata_year and not num_pattern.search(masked_source) and not num_pattern.search(combined_source_content):
+                            issues.append(f"unsupported_numerical_value:{qty}")
 
         # 7. Semantic / Content Support
-        # Check token overlap between claim and cited source_content
-        # Footer-cited claims (new 4-part format) get a relaxed threshold because
-        # document-level citation attribution is inherently less granular than inline.
-        is_footer_cited = getattr(claim, "uses_footer_citations", False)
+        # Check token overlap between claim and cited source_content.
+        # Skip for non-Latin claims: cross-lingual comparison of Hindi sentences against
+        # English source content produces meaningless results.
+        # Footer-cited claims get a relaxed threshold (document-level attribution is
+        # inherently less granular than per-sentence inline citation).
         overlap_threshold_hard = 0.25 if is_footer_cited else 0.40
         overlap_threshold_soft = 0.45 if is_footer_cited else 0.60
 
-        claim_words = {
+        claim_words = {} if is_non_latin_claim else {
             w for w in re.findall(r"\b[a-zA-Z]{3,}\b", claim.text.lower())
             if w not in _STOPWORDS and w not in _DOMAIN_FRAMING_WORDS and _stem(w) not in _DOMAIN_FRAMING_STEMS
         }
