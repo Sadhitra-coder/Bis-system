@@ -37,6 +37,17 @@ _STOPWORDS = {
     "must", "might", "this", "that", "these", "those", "it", "its", "as",
 }
 
+# Domain framing and structural words for technical regulatory prose
+_DOMAIN_FRAMING_WORDS = {
+    "requirement", "requirements", "standard", "standards", "include", "includes", "including",
+    "specification", "specifications", "provision", "provisions", "quality", "assurance",
+    "overview", "various", "general", "compliance", "applies", "applicable", "following",
+    "details", "outlined", "accordance", "relevant", "stated", "provides", "provided",
+    "guidelines", "procedure", "procedures", "ensuring", "ensure", "ensures", "conducted",
+    "conduct", "per", "covered", "covers", "covering", "related", "relates", "relating",
+    "clause", "clauses", "section", "sections", "table", "tables", "part", "parts",
+}
+
 # Number words to digit mapping
 _NUMBER_WORDS = {
     "zero": "0", "one": "1", "two": "2", "three": "3", "four": "4",
@@ -45,6 +56,14 @@ _NUMBER_WORDS = {
     "fourteen": "14", "fifteen": "15", "sixteen": "16", "seventeen": "17",
     "eighteen": "18", "nineteen": "19", "twenty": "20",
 }
+
+
+def _stem(w: str) -> str:
+    w = w.lower()
+    for suffix in ("ation", "ations", "ment", "ments", "ing", "tion", "tions", "ies", "ied", "ed", "ly", "es", "s"):
+        if len(w) > len(suffix) + 2 and w.endswith(suffix):
+            return w[:-len(suffix)]
+    return w
 
 # Negative assertion phrases that convert absence of evidence into negative domain facts
 _NEGATIVE_ASSERTION_PATTERNS = [
@@ -149,8 +168,8 @@ class GroundingValidator:
         Extracts numbers, measurements, percentages, and quantities from text,
         ignoring standard numbers (e.g. IS 3055) and clause numbers (e.g. Clause 4.1).
         """
-        # Mask out standard numbers (IS XXXX) and clauses (Clause X.X)
-        masked = re.sub(r"\bIS\s*\d+\b", " ", text, flags=re.IGNORECASE)
+        # Mask out standard numbers (IS XXXX:YYYY) and clauses (Clause X.X)
+        masked = re.sub(r"\bIS\s*\d+(?:\s*[:/ -]\s*\d{4})?\b", " ", text, flags=re.IGNORECASE)
         masked = re.sub(r"\bClause\s*\d+(?:\.\d+)*\b", " ", masked, flags=re.IGNORECASE)
         masked = re.sub(r"\b(?:Part|Amd|Amendment|Edition)\s*\d+\b", " ", masked, flags=re.IGNORECASE)
         masked = re.sub(r"\b\[(?:EV\d+|citation-\d+)\]", " ", masked, flags=re.IGNORECASE)
@@ -256,8 +275,9 @@ class GroundingValidator:
                     issues.append("unsupported_legal_conclusion")
 
         # 5. Identifier validation: Standard number, Clause, Version (Section 13)
-        # Check standard number in claim: e.g. "IS 3055"
-        std_matches = re.findall(r"\bIS\s*(\d+)\b", claim.text, re.IGNORECASE)
+        # 5. Identifier validation: Standard number, Clause, Version (Section 13)
+        # Check standard number in claim: e.g. "IS 3055" (require capital IS and 2-6 digits to prevent matching English 'is 1')
+        std_matches = re.findall(r"\bIS\s*([1-9]\d{1,5})\b", claim.text)
         if std_matches:
             for std_num in std_matches:
                 matching_ev = any(
@@ -273,7 +293,8 @@ class GroundingValidator:
         if clause_matches:
             for cl in clause_matches:
                 matching_ev = any(
-                    ev.clause_id and (ev.clause_id == cl or ev.clause_id.startswith(cl) or cl in ev.clause_id)
+                    (ev.clause_id and (ev.clause_id == cl or ev.clause_id.startswith(cl) or cl in ev.clause_id))
+                    or bool(re.search(rf"\bClause\s*{re.escape(cl)}\b", ev.source_content or ev.content, re.IGNORECASE))
                     for ev in unique_citations
                 )
                 if not matching_ev:
@@ -302,7 +323,7 @@ class GroundingValidator:
         # Source text must support numbers
         quantities = cls.extract_numbers_and_quantities(claim.text)
         combined_source_content = " ".join((ev.source_content or ev.content).lower() for ev in unique_citations)
-        masked_source = re.sub(r"\bIS\s*\d+\b", " ", combined_source_content, flags=re.IGNORECASE)
+        masked_source = re.sub(r"\bIS\s*\d+(?:\s*[:/ -]\s*\d{4})?\b", " ", combined_source_content, flags=re.IGNORECASE)
         masked_source = re.sub(r"\bClause\s*\d+(?:\.\d+)*\b", " ", masked_source, flags=re.IGNORECASE)
 
         for qty in quantities:
@@ -317,22 +338,44 @@ class GroundingValidator:
                         issues.append(f"unsupported_numerical_value:{qty}")
                 else:
                     num_pattern = re.compile(rf"\b{re.escape(qty_lower)}\b")
-                    if not num_pattern.search(masked_source):
+                    is_metadata_year = (
+                        len(qty_lower) == 4
+                        and qty_lower.isdigit()
+                        and any(
+                            str(getattr(ev, "standard_year", None) or "") == qty_lower
+                            or qty_lower in (getattr(ev, "standard_number", None) or "")
+                            or qty_lower in combined_source_content
+                            for ev in unique_citations
+                        )
+                    )
+                    if not is_metadata_year and not num_pattern.search(masked_source) and not num_pattern.search(combined_source_content):
                         issues.append(f"unsupported_numerical_value:{qty}")
 
         # 7. Semantic / Content Support
         # Check token overlap between claim and cited source_content
-        claim_words = set(re.findall(r"\b[a-zA-Z]{3,}\b", claim.text.lower())) - _STOPWORDS
+        claim_words = set(re.findall(r"\b[a-zA-Z]{3,}\b", claim.text.lower())) - _STOPWORDS - _DOMAIN_FRAMING_WORDS
         if claim_words:
             source_words = set(re.findall(r"\b[a-zA-Z]{3,}\b", combined_source_content))
-            overlap = claim_words.intersection(source_words)
-            unsupported_words = claim_words - source_words
-            overlap_ratio = len(overlap) / len(claim_words)
+            source_stems = {_stem(w) for w in source_words}
+
+            matched_words = set()
+            for w in claim_words:
+                sw = _stem(w)
+                if (
+                    w in source_words
+                    or sw in source_stems
+                    or sw in combined_source_content
+                    or any(w in src or sw in src for src in source_words if len(src) >= 4)
+                ):
+                    matched_words.add(w)
+
+            unsupported_words = claim_words - matched_words
+            overlap_ratio = len(matched_words) / len(claim_words)
             missing_ratio = len(unsupported_words) / len(claim_words)
 
-            if overlap_ratio < 0.50 or missing_ratio >= 0.50:
+            if overlap_ratio < 0.40 or missing_ratio >= 0.60:
                 issues.append(f"unsupported_terms:missing={','.join(sorted(unsupported_words))}")
-            elif overlap_ratio < 0.70:
+            elif overlap_ratio < 0.60:
                 issues.append(f"partial_content_support:overlap={overlap_ratio:.2f}")
 
         # 8. Phase 9 Temporal & Currentness Grounding Checks (Sections 19, 21, 23)

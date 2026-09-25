@@ -328,13 +328,34 @@ class EvidenceEvaluator:
         # -------------------------------------------------------------------
         base_relevance = _sigmoid(top_reranker_score)
 
+        # Broad/summary query detection (Issue A: queries discovering standard requirements / overview)
+        is_broad_query = (
+            not has_cls_query and (
+                has_std_query
+                or ctx_intent_str in (
+                    "REQUIREMENT_DISCOVERY",
+                    "STANDARD_DISCOVERY",
+                    "EXPLANATION_QUERY",
+                    "GENERAL_INFORMATION",
+                    "APPLICABILITY_QUERY",
+                )
+            )
+        )
+
+        if is_broad_query and unique_evidence:
+            valid_scores = [c.reranker_score for c in unique_evidence[:5] if c.reranker_score is not None]
+            if valid_scores:
+                # Aggregate cross-encoder relevance across top evidence chunks
+                agg_score = 0.6 * max(valid_scores) + 0.4 * (sum(valid_scores) / len(valid_scores))
+                base_relevance = _sigmoid(agg_score)
+
         # Component 1: Retrieval strength (0.0 to 0.35)
         c_retrieval = (base_relevance * 0.30) + (0.05 if dense_bm25_agreement else 0.0)
 
         # Component 2: Scope & Identifier alignment (0.0 to 0.35)
         if has_std_query or has_cls_query or has_amd_query or has_ver_query:
             c_scope = 0.0
-            if exact_std_match:
+            if exact_std_match or (is_broad_query and pool_matches_std):
                 c_scope += 0.15
             elif not has_std_query:
                 c_scope += 0.10
@@ -344,7 +365,9 @@ class EvidenceEvaluator:
             if exact_cls_match:
                 c_scope += 0.15
             elif not has_cls_query:
-                c_scope += 0.10
+                # For broad/summary queries targeting a standard without a specific clause,
+                # grant full scope alignment (0.15) if standard matches either top chunk or pool
+                c_scope += 0.15 if (is_broad_query and (exact_std_match or pool_matches_std)) else 0.10
 
             if exact_amd_match:
                 c_scope += 0.05
@@ -436,7 +459,12 @@ class EvidenceEvaluator:
             required_info.append("A more specific query specifying an Indian Standard number, clause, or subject.")
 
         # Hard Trigger E: Very weak reranker relevance
-        elif top_reranker_score is not None and top_reranker_score < -4.5:
+        check_score = top_reranker_score
+        if is_broad_query and unique_evidence:
+            valid_scores = [c.reranker_score for c in unique_evidence[:5] if c.reranker_score is not None]
+            if valid_scores:
+                check_score = max(valid_scores)
+        if check_score is not None and check_score < -4.5:
             hard_verification = True
             query_state = QueryState.INSUFFICIENT_EVIDENCE
             score = min(score, 0.30)

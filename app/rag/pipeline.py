@@ -312,6 +312,8 @@ class RAGPipeline:
             # Phase 11 Product-to-Standard Candidate Mapping fields
             "product_context": None,
             "candidate_standards": [],
+            "language": "hi" if bool(re.search(r"[\u0900-\u097F]", query)) else "en",
+            "laboratories": [],
         }
 
 
@@ -425,6 +427,7 @@ class RAGPipeline:
         technical_specification: Optional[Any] = None,
         tender_specification: Optional[Any] = None,
         compliance_documents: Optional[List[Any]] = None,
+        audience: str = "technical",
     ) -> Dict[str, Any]:
         """
         Run the complete RAG pipeline.
@@ -442,6 +445,9 @@ class RAGPipeline:
         rerank_top_k:
             Optional override for number of final
             context chunks.
+
+        audience:
+            Response mode: 'technical' (default) or 'consumer'.
 
         Returns
         -------
@@ -476,6 +482,33 @@ class RAGPipeline:
             raise ValueError(
                 "Query cannot be empty."
             )
+
+        # ----------------------------------------------------
+        # HINDI QUERY TRANSLATION (Part 1)
+        # ----------------------------------------------------
+        original_query = query
+        is_hindi = bool(re.search(r"[\u0900-\u097F]", query))
+        if is_hindi and settings.llm_available and self.generator is not None:
+            try:
+                trans_prompt = (
+                    "You are a translator for Indian Standards and regulatory compliance queries. "
+                    "Translate the following Hindi query into clear, accurate English. "
+                    "Preserve any Indian Standard numbers (like IS 1293, IS 694, IS 16444, IS 1417, IS 1786), clause references, or technical terms. "
+                    "Return ONLY the English translation without explanation or quotes:\n\n"
+                    f"{query}"
+                )
+                translated_q = self.generator.client.chat_completion(
+                    messages=[{"role": "user", "content": trans_prompt}],
+                    model=self.generator.model,
+                    temperature=0.0,
+                    max_completion_tokens=200,
+                    description="hindi query translation to english"
+                ).strip()
+                if translated_q:
+                    logger.info("Translated Hindi query '%s' -> '%s'", query, translated_q)
+                    query = translated_q
+            except Exception as e:
+                logger.warning("Failed to translate Hindi query to English: %s", e)
 
         # ----------------------------------------------------
         # RESOLVE TOP K VALUES
@@ -902,6 +935,7 @@ class RAGPipeline:
                 query=query,
                 results=evidence_items,
                 confidence=confidence,
+                audience=audience,
             )
             answer = generation_result.get("answer", "")
             raw_claims = generation_result.get("raw_claims", [])
@@ -924,6 +958,7 @@ class RAGPipeline:
                     results=evidence_items,
                     confidence=confidence,
                     repair_feedback=grounding.unsupported_claims_summary,
+                    audience=audience,
                 )
                 repaired_answer = repair_result.get("answer", "")
                 repaired_claims = repair_result.get("raw_claims", [])
@@ -1059,6 +1094,50 @@ class RAGPipeline:
                 )
 
         # ====================================================
+        # STEP 4: LABORATORY SUGGESTIONS & HINDI TRANSLATION
+        # ====================================================
+
+        # Laboratory suggestion lookup (Part 2)
+        top_std = evidence_items[0].standard_number if evidence_items else None
+        target_std = entities.standard_number or top_std
+        if not target_std and candidate_standards_list:
+            target_std = candidate_standards_list[0].get("standard_number")
+
+        laboratories_list: List[Dict[str, Any]] = []
+        if target_std and self.knowledge_repo is not None:
+            try:
+                labs = self.knowledge_repo.get_laboratories_for_standard(target_std)
+                laboratories_list = [l.model_dump() if hasattr(l, "model_dump") else l.dict() for l in labs]
+            except Exception as e:
+                logger.debug("Failed to lookup laboratories for %s: %s", target_std, e)
+
+        # Hindi back-translation (Part 1)
+        if is_hindi and settings.llm_available and self.generator is not None:
+            try:
+                trans_back_prompt = (
+                    "You are a professional Hindi translator for Bureau of Indian Standards (BIS) technical and regulatory documents.\n"
+                    "Translate the following English compliance response into formal, clear, and accurate Hindi (Devanagari script).\n\n"
+                    "STRICT CONSTRAINTS:\n"
+                    "1. PRESERVE ALL citation tags like [EV1], [EV2] EXACTLY as they are. Do NOT translate, modify, or remove them.\n"
+                    "2. PRESERVE ALL Indian Standard numbers (e.g., IS 1293, IS 694, IS 16444, IS 1417, IS 1786) and clause references (e.g., Clause 4.1) in Latin script.\n"
+                    "3. PRESERVE ALL numbers, measurements, and units (e.g., 2019, 16 A, 250 V, 50 Hz).\n"
+                    "4. PRESERVE ALL QCO numbers, gazette references, and legal order names.\n"
+                    "5. Return ONLY the Hindi translation without markdown commentary or preamble.\n\n"
+                    f"{answer}"
+                )
+                hindi_ans = self.generator.client.chat_completion(
+                    messages=[{"role": "user", "content": trans_back_prompt}],
+                    model=self.generator.model,
+                    temperature=0.0,
+                    max_completion_tokens=self.generator.max_tokens,
+                    description="english answer translation to hindi"
+                ).strip()
+                if hindi_ans:
+                    answer = hindi_ans
+            except Exception as e:
+                logger.warning("Failed to translate answer to Hindi: %s", e)
+
+        # ====================================================
         # FINAL RESPONSE
         # ====================================================
 
@@ -1071,8 +1150,10 @@ class RAGPipeline:
         )
 
         response = {
-            "query": query,
+            "query": original_query,
             "answer": answer,
+            "language": "hi" if is_hindi else "en",
+            "laboratories": laboratories_list,
             "sources": sources,
             "retrieved_chunks": len(retrieved_results),
             "reranked_chunks": len(reranked_results),

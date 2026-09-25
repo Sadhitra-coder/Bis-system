@@ -128,6 +128,8 @@ def query_documents(payload: QueryRequest, request: Request):
             kwargs["tender_specification"] = payload.tender_specification
         if payload.compliance_documents is not None:
             kwargs["compliance_documents"] = payload.compliance_documents
+        if payload.audience is not None:
+            kwargs["audience"] = payload.audience
 
         if top_k is None:
             result = rag_pipeline.query(payload.query, **kwargs)
@@ -149,6 +151,8 @@ def query_documents(payload: QueryRequest, request: Request):
             retrieved_chunks=result["retrieved_chunks"],
             reranked_chunks=result.get("reranked_chunks"),
             model=result.get("model"),
+            language=result.get("language", "en"),
+            laboratories=result.get("laboratories"),
             confidence_score=result.get("confidence_score"),
             confidence_level=result.get("confidence_level"),
             decision=result.get("decision"),
@@ -186,4 +190,26 @@ def query_documents(payload: QueryRequest, request: Request):
         raise
     except Exception as e:
         logger.exception("Error executing query: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/laboratories/{standard_number}")
+def get_laboratories_for_standard(standard_number: str, request: Request):
+    """
+    Retrieve testing laboratories registered for a specific Indian Standard.
+    """
+    repo = getattr(request.app.state, "knowledge_repo", None)
+    if repo is None:
+        from app.knowledge.repository import default_repository
+        repo = default_repository
+
+    try:
+        labs = repo.get_laboratories_for_standard(standard_number)
+        return {
+            "standard_number": standard_number,
+            "laboratories": [l.model_dump() if hasattr(l, "model_dump") else l.dict() for l in labs],
+            "total_laboratories": len(labs),
+        }
+    except Exception as e:
+        logger.exception("Error fetching laboratories for %s: %s", standard_number, e)
         raise HTTPException(status_code=500, detail=str(e))

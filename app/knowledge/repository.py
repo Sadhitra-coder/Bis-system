@@ -37,6 +37,17 @@ from app.knowledge.models import (
 DEFAULT_DB_PATH = DATA_DIR / "knowledge" / "bis_knowledge.db"
 
 
+def _to_standard_status(val: Any) -> StandardStatus:
+    if not val:
+        return StandardStatus.UNKNOWN
+    if isinstance(val, StandardStatus):
+        return val
+    try:
+        return StandardStatus(str(val).lower())
+    except Exception:
+        return StandardStatus.UNKNOWN
+
+
 class KnowledgeRepository:
     """Thread-safe SQLite repository for BIS Knowledge entities."""
 
@@ -515,7 +526,7 @@ class KnowledgeRepository:
             publication_date=row["publication_date"],
             effective_date=row["effective_date"],
             withdrawal_date=row["withdrawal_date"],
-            status=StandardStatus(row["status"]) if row["status"] else StandardStatus.UNKNOWN,
+            status=_to_standard_status(row["status"]),
             document_id=row["document_id"],
             source_url=row["source_url"],
             created_at=row["created_at"],
@@ -550,7 +561,7 @@ class KnowledgeRepository:
                     effective_date=r["effective_date"],
                     source_document_id=r["source_document_id"],
                     source_url=r["source_url"],
-                    status=StandardStatus(r["status"]) if r["status"] else StandardStatus.UNKNOWN,
+                    status=_to_standard_status(r["status"]),
                     created_at=r["created_at"],
                 )
                 for r in rows
@@ -592,7 +603,7 @@ class KnowledgeRepository:
             publication_date=row["publication_date"],
             effective_date=row["effective_date"],
             withdrawal_date=row["withdrawal_date"],
-            status=StandardStatus(row["status"]) if row["status"] else StandardStatus.UNKNOWN,
+            status=_to_standard_status(row["status"]),
             source_url=row["source_url"],
             is_current=is_cur,
             created_at=row["created_at"],
@@ -835,6 +846,56 @@ class KnowledgeRepository:
                     confidence=r["confidence"],
                     created_at=r["created_at"],
                 ) for r in rows
+            ]
+
+    def get_laboratories_for_standard(self, standard_id_or_number: str) -> List[Laboratory]:
+        """
+        Retrieve testing laboratories mapped via TESTED_BY relationship to a given standard.
+        Accepts standard numbers (e.g. 'IS 1293', '1293', 'IS 1293:2019') or standard_id.
+        """
+        import re
+        raw = (standard_id_or_number or "").strip()
+        if not raw:
+            return []
+
+        # Extract numeric standard designation
+        m = re.search(r"(\d+)", raw)
+        std_num_int = m.group(1) if m else raw
+        std_patterns = [
+            raw,
+            f"IS {std_num_int}",
+            std_num_int,
+        ]
+
+        query = """
+        SELECT DISTINCT l.* FROM laboratories l
+        JOIN knowledge_relationships r 
+          ON (r.target_entity_id = l.lab_id AND r.target_entity_type = 'LABORATORY')
+        WHERE r.relationship_type = 'TESTED_BY'
+          AND (
+            r.source_entity_id = ? 
+            OR r.source_entity_id = ?
+            OR r.source_entity_id = ?
+            OR r.source_entity_id LIKE ?
+          )
+        ORDER BY l.name
+        """
+        like_pattern = f"%{std_num_int}%"
+        with self._lock:
+            rows = self._conn.execute(
+                query, (std_patterns[0], std_patterns[1], std_patterns[2], like_pattern)
+            ).fetchall()
+            return [
+                Laboratory(
+                    lab_id=r["lab_id"],
+                    name=r["name"],
+                    city=r["city"],
+                    state=r["state"],
+                    accreditation_number=r["accreditation_number"],
+                    scope_of_testing=json.loads(r["scope_of_testing"]) if r["scope_of_testing"] else [],
+                    created_at=r["created_at"],
+                )
+                for r in rows
             ]
 
 

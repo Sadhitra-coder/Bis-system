@@ -365,6 +365,7 @@ class QueryRequest(BaseModel):
     tender_specification: Optional[Dict[str, Any]] = None
     # Phase 14 Compliance & Business Documents fields
     compliance_documents: Optional[List[Dict[str, Any]]] = None
+    audience: Optional[str] = "technical"
 
 
 class QueryResponse(BaseModel):
@@ -379,6 +380,8 @@ class QueryResponse(BaseModel):
     retrieved_chunks: int
     reranked_chunks: Optional[int] = None
     model: Optional[str] = None
+    language: Optional[str] = "en"
+    laboratories: Optional[List[Dict[str, Any]]] = None
     # Phase 7 Evidence & Confidence fields
     confidence_score: Optional[float] = None
     confidence_level: Optional[str] = None
