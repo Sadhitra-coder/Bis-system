@@ -130,6 +130,14 @@ class Citation:
 class AnswerClaim:
     """
     Canonical answer claim representation.
+
+    uses_footer_citations: True when all citation_ids were inherited from the
+    answer-level Sources: footer line (new 4-part answer format) rather than
+    appearing inline as [EV1] tokens within the claim sentence itself.
+    The validator uses this flag to calibrate overlap thresholds: document-level
+    citation attribution is inherently less granular than inline attribution,
+    so a stricter per-sentence semantic overlap threshold would be a false-positive
+    factory in this mode.
     """
     claim_id: str
     text: str
@@ -139,6 +147,7 @@ class AnswerClaim:
     validation_notes: Optional[str] = None
     supporting_citation_count: int = 0
     issues: List[str] = field(default_factory=list)
+    uses_footer_citations: bool = False  # True when citations inherited from Sources: footer, not inline
 
     def to_dict(self) -> Dict[str, Any]:
         return {

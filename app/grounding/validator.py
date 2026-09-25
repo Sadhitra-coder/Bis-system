@@ -155,8 +155,13 @@ class GroundingValidator:
 
             # Extract citations like [EV1], [EV2], or [citation-1]
             citation_matches = re.findall(r"\[(EV\d+|citation-\d+)\]", s, re.IGNORECASE)
-            # Normalize citation tokens (e.g. EV1)
-            citation_ids = [c.upper() for c in citation_matches] or list(fallback_citation_ids)
+            # Normalize citation tokens (e.g. EV1); track whether citations are inline or from footer
+            uses_footer = False
+            if citation_matches:
+                citation_ids = [c.upper() for c in citation_matches]
+            else:
+                citation_ids = list(fallback_citation_ids)
+                uses_footer = bool(fallback_citation_ids)
 
             # Clean text of citation brackets for analysis
             clean_text = re.sub(r"\[(EV\d+|citation-\d+)\]", "", s).strip()
@@ -187,6 +192,7 @@ class GroundingValidator:
                     text=clean_text,
                     claim_type=claim_type,
                     citation_ids=citation_ids,
+                    uses_footer_citations=uses_footer,
                 )
             )
             claim_counter += 1
@@ -384,6 +390,12 @@ class GroundingValidator:
 
         # 7. Semantic / Content Support
         # Check token overlap between claim and cited source_content
+        # Footer-cited claims (new 4-part format) get a relaxed threshold because
+        # document-level citation attribution is inherently less granular than inline.
+        is_footer_cited = getattr(claim, "uses_footer_citations", False)
+        overlap_threshold_hard = 0.25 if is_footer_cited else 0.40
+        overlap_threshold_soft = 0.45 if is_footer_cited else 0.60
+
         claim_words = {
             w for w in re.findall(r"\b[a-zA-Z]{3,}\b", claim.text.lower())
             if w not in _STOPWORDS and w not in _DOMAIN_FRAMING_WORDS and _stem(w) not in _DOMAIN_FRAMING_STEMS
@@ -407,14 +419,17 @@ class GroundingValidator:
             overlap_ratio = len(matched_words) / len(claim_words)
             missing_ratio = len(unsupported_words) / len(claim_words)
 
-            if overlap_ratio < 0.40 or missing_ratio >= 0.60:
+            if overlap_ratio < overlap_threshold_hard or missing_ratio >= 0.60:
                 issues.append(f"unsupported_terms:missing={','.join(sorted(unsupported_words))}")
-            elif overlap_ratio < 0.60:
+            elif overlap_ratio < overlap_threshold_soft:
                 issues.append(f"partial_content_support:overlap={overlap_ratio:.2f}")
 
         # 8. Phase 9 Temporal & Currentness Grounding Checks (Sections 19, 21, 23)
         # A. Currentness assertion requires explicit temporal evidence (not publication date alone)
-        if _CURRENTNESS_CLAIM_PATTERN.search(claim.text):
+        # EXCEPTION: for footer-cited claims (new 4-part format), the temporal resolver already
+        # validated currentness at the pipeline level — skip the per-sentence re-check to avoid
+        # false positives from document-level citation attribution.
+        if _CURRENTNESS_CLAIM_PATTERN.search(claim.text) and not is_footer_cited:
             has_temporal_proof = False
             for ev in unique_citations:
                 meta = getattr(ev, "metadata", {}) or {}
