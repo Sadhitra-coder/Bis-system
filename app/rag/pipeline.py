@@ -737,6 +737,84 @@ class RAGPipeline:
             relationships=std_relationships,
         )
 
+        # Grounding & Temporal metadata enrichment (Requirement: ensure evidence items carry is_current & status)
+        if temporal_resolution.status == TemporalStatus.CURRENT_SUPPORTED:
+            for ev in evidence_items:
+                if not ev.metadata:
+                    ev.metadata = {}
+                ev.metadata["is_current"] = True
+                ev.metadata["status"] = "effective"
+
+        # If this is a temporal/version query, inject verified registry record as citable evidence
+        norm_q = normalize_query(query)
+        is_version_or_temporal_query = (
+            getattr(entities, "relative_temporal", None) in ("current", "historical")
+            or getattr(entities, "temporal_intent", None) in ("current", "historical", "exact_version", "exact_edition")
+            or bool(re.search(r"\b(?:current|latest|present|active|in\s+force|revised|revision|revisions|amended|amendment|amendments|superseded|supersedes|version|versions|valid|validity|withdrawn)\b", norm_q, re.IGNORECASE))
+        )
+
+        if is_version_or_temporal_query and std_obj:
+            t_status_val = temporal_resolution.status.value.upper() if hasattr(temporal_resolution.status, "value") else str(temporal_resolution.status).upper()
+            temporal_text_parts = [
+                f"Official BIS Standards Registry Record for {std_obj.standard_number}: {std_obj.standard_title or 'Standard'}.",
+                f"Status: {t_status_val}.",
+                f"Active Edition: {std_obj.edition_or_version or 'Current'} ({std_obj.standard_year or 'Current Year'}).",
+            ]
+            if std_obj.effective_date:
+                temporal_text_parts.append(f"Effective Date: {std_obj.effective_date}.")
+            for r in std_relationships:
+                if r.statement_text:
+                    temporal_text_parts.append(f"Supersession: {r.statement_text}.")
+            if std_amendments:
+                amd_strs = [f"{a.title} (Effective: {a.effective_date or 'N/A'})" for a in std_amendments]
+                temporal_text_parts.append(f"Published Amendments: {'; '.join(amd_strs)}.")
+            if len(std_versions) > 1:
+                hist_strs = []
+                for v in std_versions:
+                    if v.version_id != temporal_resolution.resolved_version_id and v.status.value in ("superseded", "withdrawn"):
+                        h_desc = f"{v.edition or v.standard_year} ({v.status.value}"
+                        if v.withdrawal_date:
+                            h_desc += f", withdrawn {v.withdrawal_date}"
+                        h_desc += ")"
+                        hist_strs.append(h_desc)
+                if hist_strs:
+                    temporal_text_parts.append(f"Historical Editions: {'; '.join(hist_strs)}.")
+            if temporal_resolution.requires_verification:
+                temporal_text_parts.append("Notice: Legal currentness could not be definitively confirmed from official BIS supersession records. Verification required against the official BIS portal (services.bis.gov.in).")
+
+            temporal_content = " ".join(temporal_text_parts)
+            temporal_ev = EvidenceItem(
+                chunk_id=f"temporal_{std_obj.standard_number.replace(' ', '_')}",
+                document_id=std_obj.document_id,
+                source_file=f"{std_obj.standard_number}_Registry.pdf",
+                source_content=temporal_content,
+                content=temporal_content,
+                standard_id=std_obj.standard_id,
+                standard_number=std_obj.standard_number,
+                standard_title=std_obj.standard_title,
+                version_id=temporal_resolution.resolved_version_id,
+                edition_or_version=std_obj.edition_or_version,
+                standard_year=std_obj.standard_year,
+                clause_id="Registry-Record",
+                clause_title="Official BIS Registry Version and Amendment Record",
+                provenance_completeness=1.0,
+                authority="BIS",
+                document_type="indian_standard",
+                retrieval_methods=["registry_lookup", "dense", "bm25"],
+                reranker_score=10.0,
+                fusion_score=1.0,
+                knowledge_resolved=True,
+                metadata={
+                    "is_current": (temporal_resolution.status == TemporalStatus.CURRENT_SUPPORTED),
+                    "status": "effective" if temporal_resolution.status == TemporalStatus.CURRENT_SUPPORTED else "unknown",
+                    "authority": "BIS",
+                    "standard_number": std_obj.standard_number,
+                    "standard_title": std_obj.standard_title,
+                }
+            )
+            evidence_items.insert(0, temporal_ev)
+            reranked_results.insert(0, temporal_ev)
+
         # Evaluate evidence confidence & determine operational decision
         confidence = EvidenceEvaluator.evaluate(
             query=query,
@@ -936,6 +1014,7 @@ class RAGPipeline:
                 results=evidence_items,
                 confidence=confidence,
                 audience=audience,
+                temporal_resolution=temporal_resolution,
             )
             answer = generation_result.get("answer", "")
             raw_claims = generation_result.get("raw_claims", [])
@@ -959,6 +1038,7 @@ class RAGPipeline:
                     confidence=confidence,
                     repair_feedback=grounding.unsupported_claims_summary,
                     audience=audience,
+                    temporal_resolution=temporal_resolution,
                 )
                 repaired_answer = repair_result.get("answer", "")
                 repaired_claims = repair_result.get("raw_claims", [])

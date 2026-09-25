@@ -320,6 +320,14 @@ Structure your answer in clear, readable markdown following these steps:
    - "Based on the provided excerpts..."
    Instead, state directly what the standard establishes and requires.
 
+5. VERSION & CURRENTNESS QUERIES:
+   When answering questions about whether a standard is current, revised, or amended:
+   - State clearly whether the standard is currently active and in force.
+   - Specify the current edition/revision and year (e.g. Fourth Revision : 2019).
+   - State the previous superseded edition and withdrawal/transition details if present in evidence.
+   - Summarize any published amendments.
+   - Ensure every factual assertion is cited with its supporting evidence token (e.g. [EV1]).
+
 {audience_block}
 
 ==================================================
@@ -350,6 +358,7 @@ You must format your entire response as a valid JSON object matching this schema
         confidence: Optional[ConfidenceResult] = None,
         repair_feedback: Optional[str] = None,
         audience: str = "technical",
+        temporal_resolution: Optional[Any] = None,
     ) -> str:
         """
         Build the dynamic user prompt with confidence-aware, audience-aware, and grounding instructions.
@@ -363,6 +372,33 @@ You must format your entire response as a valid JSON object matching this schema
         else:
             audience_instruction = """
 - Target Audience: Technical. Include exact clause numbers, testing parameters, and regulatory references.
+"""
+
+        temporal_instruction = ""
+        if temporal_resolution is not None:
+            t_status = getattr(temporal_resolution, "status", None)
+            t_status_val = getattr(t_status, "value", str(t_status)) if t_status else ""
+            t_req = getattr(temporal_resolution, "requires_verification", False)
+            t_reason = getattr(temporal_resolution, "reason", "")
+            if t_status_val == "current_supported" and not t_req:
+                temporal_instruction = f"""
+==================================================
+VERIFIED TEMPORAL / VERSION RECORD
+==================================================
+The standard's temporal status is VERIFIED in the official BIS Registry:
+- Status: Legal Currentness Confirmed ({t_status_val})
+- Details: {t_reason}
+In your answer, explicitly confirm the current active edition/year, prior superseded edition, and published amendments as supported by the retrieved evidence [EV].
+"""
+            elif t_req or t_status_val == "temporally_uncertain":
+                temporal_instruction = f"""
+==================================================
+TEMPORAL UNCERTAINTY NOTICE
+==================================================
+The legal currentness of this standard could NOT be confirmed from official BIS supersession records:
+- Reason: {t_reason}
+- Requirement: State clearly that legal currentness is unverified in the active index and must be confirmed via official BIS gazette or the BIS portal (services.bis.gov.in).
+Do NOT assert that this standard is currently legally binding. Clearly explain the uncertainty.
 """
 
         confidence_instruction = ""
@@ -427,6 +463,7 @@ RETRIEVED DOCUMENTATION
 
 {context}
 {confidence_instruction}
+{temporal_instruction}
 {repair_instruction}
 ==================================================
 IMPORTANT ANSWERING RULES
@@ -516,6 +553,7 @@ Now provide the final JSON response.
         confidence: Optional[ConfidenceResult] = None,
         repair_feedback: Optional[str] = None,
         audience: str = "technical",
+        temporal_resolution: Optional[Any] = None,
     ) -> Dict[str, Any]:
         """
         Generate a grounded answer with evidence confidence awareness and grounding validation.
@@ -592,6 +630,7 @@ Now provide the final JSON response.
                 confidence=confidence,
                 repair_feedback=repair_feedback,
                 audience=audience,
+                temporal_resolution=temporal_resolution,
             )
         )
 
