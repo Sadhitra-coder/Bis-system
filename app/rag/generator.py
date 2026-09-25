@@ -257,6 +257,7 @@ CONTENT:
     ) -> str:
         """
         Customer-readable and grounding system prompt supporting both technical and consumer audiences.
+        Enforces clear visual hierarchy: bold headline, plain explanation, structured bullets, separated sources.
         """
         mode = (audience or "technical").lower().strip()
         if mode == "consumer":
@@ -268,10 +269,10 @@ Your target audience is a general consumer or product buyer:
 1. Use clear, simple, everyday language without technical jargon.
 2. OMIT all clause numbers and section references from the response body (do NOT mention "Clause 4.1", "Clause 18", etc.).
 3. Clearly explain what the product is, key safety and quality features, and what protection the standard ensures.
-4. At the very end of your response, include this exact sentence as a separate concluding line:
+4. Conclude with this exact sentence as a separate line before Sources:
    "Consumers can verify the authenticity of the ISI mark or license validity using the official BIS Care mobile app."
-   (Do NOT attach an [EV] citation tag to this BIS Care app tip, and do NOT include it as a factual claim in the "claims" list.)
-5. Maintain strict grounding fidelity to the cited passages: use words and concepts directly present in the source text without inventing unsupported generalizations.
+   (Do NOT attach citation tags to this BIS Care app tip, and do NOT include it as a factual claim in the "claims" list.)
+5. Maintain strict grounding fidelity to the cited passages without inventing unsupported generalizations.
 """
         else:
             audience_block = """
@@ -279,7 +280,7 @@ Your target audience is a general consumer or product buyer:
 AUDIENCE: REGULATORY & TECHNICAL COMPLIANCE MODE
 ==================================================
 Your target audience is a compliance manager, testing engineer, or regulatory officer:
-1. Provide precise technical specifications, test methods, tolerances, and explicit clause numbers.
+1. Provide precise technical specifications, test methods, tolerances, and explicit clause numbers in the structured bullet points.
 2. Maintain formal engineering and regulatory precision.
 """
 
@@ -293,40 +294,42 @@ ABSOLUTE GROUNDING & NO-HALLUCINATION RULES
 ==================================================
 1. Never state something as a fact unless it is directly supported by the retrieved documentation.
 2. Do not use outside knowledge, extrapolate, or guess.
-3. Every factual claim MUST cite the exact evidence token supporting it (e.g. [EV1], [EV2]).
+3. Every factual claim MUST be directly supported by the retrieved evidence. Associate each claim with its supporting evidence token in the "claims" list (e.g. "citation_ids": ["EV1"]).
 4. NEVER invent citation tokens such as [EV99] or cite non-existent evidence tokens.
 5. NUMERICAL INTEGRITY: All numbers, percentages, measurements, frequencies, sample sizes, and tolerances must match the cited evidence text exactly. Do not round, approximate, or change units.
 6. A clause number is NOT the same as its text. Never invent the content of a clause merely because its number was mentioned.
 7. CRITICAL: Never convert the absence of evidence into negative evidence. If retrieved passages do not mention a requirement, say "No requirement was found in the retrieved documentation." Never claim a requirement does not exist.
 
 ==================================================
-ANSWER STRUCTURE & READABILITY (ISSUE B)
+ANSWER STRUCTURE & VISUAL HIERARCHY (REQUIRED)
 ==================================================
-Structure your answer in clear, readable markdown following these steps:
+Structure your answer in clean markdown with clear visual hierarchy following this exact 4-part structure:
 
-1. DIRECT ANSWER:
-   Open immediately with 1 to 2 direct, plain-language sentences directly answering the user's question or summarizing the standard's scope and purpose.
+1. BOLD HEADLINE / STATUS LINE:
+   Start with a short, bolded headline or status line:
+   - For version/currentness queries: e.g. "**Status: Currently in force**" or "**Status: Verification Required (Unconfirmed Currentness)**".
+   - For factual or technical queries: a short bolded direct answer (e.g. "**IS 1786 specifies Fe 500D grade rebar requirements.**").
 
-2. CORE REQUIREMENTS & FINDINGS:
-   Follow with clear, readable prose or clean bulleted points detailing the key technical specifications, test requirements, or safety provisions supported by the retrieved text. Attach citation tokens ([EV1]) to each fact.
+2. PLAIN EXPLANATION:
+   Follow with 2 to 4 sentences of clear, plain-language explanation providing the direct answer, standard scope, and essential context.
 
-3. REGULATORY STATUS:
-   If present in the retrieved documentation or context, state clearly whether certification is mandatory or voluntary, and cite the relevant Quality Control Order (QCO) reference or date.
+3. STRUCTURED DETAILS (CLEAN SHORT BULLETS OR NUMBERED LIST):
+   Where there are multiple distinct facts (such as technical specifications, test methods, version timeline, or amendments), format them as a clean, short bulleted or numbered list. NEVER cram multiple distinct requirements or timeline events into a single dense paragraph.
+   - For version queries: list the current edition/year, superseded edition details, and published amendments.
+   - For technical queries: list each key requirement, test method, or parameter.
 
-4. ELIMINATE META-PHRASING:
+4. SEPARATED CITATION SOURCES LINE AT THE VERY END:
+   Place citations as a clearly separated "Sources:" line at the very end of your response, NOT scattered inline as [EV1][EV2] mid-sentence.
+   Format:
+   Sources: [EV1], [EV2]
+   (or "Sources: [EV1]" if single source)
+
+5. ELIMINATE META-PHRASING:
    Never use bureaucratic meta-phrasing such as:
    - "The retrieved documentation does not specify..."
    - "The retrieved table links Clause..."
    - "Based on the provided excerpts..."
    Instead, state directly what the standard establishes and requires.
-
-5. VERSION & CURRENTNESS QUERIES:
-   When answering questions about whether a standard is current, revised, or amended:
-   - State clearly whether the standard is currently active and in force.
-   - Specify the current edition/revision and year (e.g. Fourth Revision : 2019).
-   - State the previous superseded edition and withdrawal/transition details if present in evidence.
-   - Summarize any published amendments.
-   - Ensure every factual assertion is cited with its supporting evidence token (e.g. [EV1]).
 
 {audience_block}
 
@@ -335,7 +338,7 @@ JSON OUTPUT SCHEMA
 ==================================================
 You must format your entire response as a valid JSON object matching this schema:
 {{
-  "answer": "Complete, customer-readable answer in markdown format with inline [EV1] citation tags.",
+  "answer": "**Status: Currently in force**\\n\\nIS 1293 is active and in force as the Fourth Revision published in 2019. It establishes safety and design requirements for plugs and socket-outlets for domestic use.\\n\\n- Edition: Fourth Revision (2019), effective December 1, 2019\\n- Supersedes: IS 1293:2005 (Third Revision), withdrawn October 23, 2020\\n- Amendments: Amendment No. 1 (effective Dec 2020) and Amendment No. 2 (effective Sept 25, 2023)\\n\\nSources: [EV1], [EV2]",
   "claims": [
     {{
       "claim_id": "C1",
@@ -361,17 +364,17 @@ You must format your entire response as a valid JSON object matching this schema
         temporal_resolution: Optional[Any] = None,
     ) -> str:
         """
-        Build the dynamic user prompt with confidence-aware, audience-aware, and grounding instructions.
+        Build the dynamic user prompt with confidence-aware, audience-aware, and visual hierarchy instructions.
         """
         mode = (audience or "technical").lower().strip()
         audience_instruction = ""
         if mode == "consumer":
             audience_instruction = """
-- Target Audience: Consumer. Use clear everyday language, omit clause numbers from the answer, and conclude with the official BIS Care mobile app verification tip (without citation tags).
+- Target Audience: Consumer. Use clear everyday language, omit clause numbers from the answer, and conclude with the official BIS Care mobile app verification tip (without citation tags) immediately before the Sources line.
 """
         else:
             audience_instruction = """
-- Target Audience: Technical. Include exact clause numbers, testing parameters, and regulatory references.
+- Target Audience: Technical. Include exact clause numbers, testing parameters, and regulatory references in the bullet points.
 """
 
         temporal_instruction = ""
@@ -388,7 +391,8 @@ VERIFIED TEMPORAL / VERSION RECORD
 The standard's temporal status is VERIFIED in the official BIS Registry:
 - Status: Legal Currentness Confirmed ({t_status_val})
 - Details: {t_reason}
-In your answer, explicitly confirm the current active edition/year, prior superseded edition, and published amendments as supported by the retrieved evidence [EV].
+Use the bold headline: "**Status: Currently in force**"
+In the explanation and bulleted timeline, explicitly confirm the current active edition/year, prior superseded edition, and published amendments as supported by the retrieved evidence.
 """
             elif t_req or t_status_val == "temporally_uncertain":
                 temporal_instruction = f"""
@@ -399,6 +403,7 @@ The legal currentness of this standard could NOT be confirmed from official BIS 
 - Reason: {t_reason}
 - Requirement: State clearly that legal currentness is unverified in the active index and must be confirmed via official BIS gazette or the BIS portal (services.bis.gov.in).
 Do NOT assert that this standard is currently legally binding. Clearly explain the uncertainty.
+Use the bold headline: "**Status: Verification Required (Unconfirmed Currentness)**"
 """
 
         confidence_instruction = ""
@@ -466,16 +471,20 @@ RETRIEVED DOCUMENTATION
 {temporal_instruction}
 {repair_instruction}
 ==================================================
-IMPORTANT ANSWERING RULES
+REQUIRED ANSWER STRUCTURE & FORMAT
 ==================================================
 
-- Answer directly using only facts supported by the retrieved documentation.
-- Attach evidence citation tokens like [EV1], [EV2] to every factual assertion.
+- Follow this exact 4-part visual hierarchy:
+  1. A short bolded headline/status line (e.g. "**Status: Currently in force**" or a direct bold answer).
+  2. 2 to 4 sentences of plain explanation.
+  3. A clean short bullet or numbered list for multiple distinct facts, timeline events, or requirements.
+  4. Citations ONLY in a clearly separated "Sources: [EV1], [EV2]" line at the very end, NOT scattered inline mid-sentence.
+- Associate each factual claim in the "claims" list with its supporting evidence token (e.g. "citation_ids": ["EV1"]).
 - Do not invent missing information.
 {audience_instruction}
 - Format your entire output as a valid JSON object matching:
 {{
-  "answer": "Your complete readable answer text with inline citation tokens [EV1], etc.",
+  "answer": "Your complete formatted answer in markdown with bold headline, explanation, clean bullets, and separated Sources: [EV1], [EV2] line at end.",
   "claims": [
     {{"claim_id": "C1", "text": "Claim statement", "claim_type": "fact", "citation_ids": ["EV1"]}}
   ]

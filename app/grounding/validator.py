@@ -35,6 +35,8 @@ _STOPWORDS = {
     "is", "are", "was", "were", "be", "been", "being", "have", "has", "had",
     "having", "do", "does", "did", "doing", "would", "could", "shall", "may",
     "must", "might", "this", "that", "these", "those", "it", "its", "as",
+    "which", "who", "whom", "whose", "where", "why", "how", "since", "while",
+    "also", "well", "both", "either", "neither", "though", "although", "even",
 }
 
 # Domain framing and structural words for technical regulatory prose
@@ -50,6 +52,10 @@ _DOMAIN_FRAMING_WORDS = {
     "used", "using", "uses", "use", "meet", "meets", "meeting", "met", "safe", "safety",
     "system", "systems", "types", "type", "method", "methods", "rules", "rule", "item", "items",
     "exist", "exists", "aspect", "aspects", "clear", "confirmed", "confirm", "confirms",
+    # Temporal, version, calendar, and structural formatting words
+    "january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december",
+    "jan", "feb", "mar", "apr", "jun", "jul", "aug", "sep", "sept", "oct", "nov", "dec",
+    "source", "sources", "reference", "references", "status", "currently", "force", "active", "edition", "revision", "supersedes", "amendment", "amendments", "withdrawn", "effective", "published",
 }
 
 # Number words to digit mapping
@@ -123,9 +129,18 @@ class GroundingValidator:
         if not text or not text.strip():
             return []
 
+        # Check for separated Sources line at the end (e.g. "Sources: [EV1], [EV2]")
+        sources_match = re.search(r"(?:Sources|References)\s*:\s*((?:\[(?:EV\d+|citation-\d+)\][,\s]*)+)", text, re.IGNORECASE)
+        fallback_citation_ids = []
+        if sources_match:
+            fallback_citation_ids = [c.upper() for c in re.findall(r"\[(EV\d+|citation-\d+)\]", sources_match.group(1), re.IGNORECASE)]
+
+        # Strip trailing Sources / References block before splitting into claims
+        text_without_sources = re.sub(r"\n*(?:\*\*Sources:\*\*|Sources:|References:).*$", "", text, flags=re.DOTALL | re.IGNORECASE).strip()
+
         claims: List[AnswerClaim] = []
-        # Split by sentence boundaries, preserving punctuation
-        raw_sentences = re.split(r"(?<=[.!?])\s+", text.strip())
+        # Split by sentence boundaries, bullet items, or paragraph breaks
+        raw_sentences = re.split(r"(?<=[.!?])\s+|\n{2,}|\n(?=[-*•]|\d+\.)", text_without_sources)
         claim_counter = 1
 
         for raw_s in raw_sentences:
@@ -133,14 +148,24 @@ class GroundingValidator:
             if not s:
                 continue
 
+            # Strip leading bullet dashes or numbers
+            s = re.sub(r"^[-*•\d.]+\s*", "", s).strip()
+            if not s:
+                continue
+
             # Extract citations like [EV1], [EV2], or [citation-1]
             citation_matches = re.findall(r"\[(EV\d+|citation-\d+)\]", s, re.IGNORECASE)
             # Normalize citation tokens (e.g. EV1)
-            citation_ids = [c.upper() for c in citation_matches]
+            citation_ids = [c.upper() for c in citation_matches] or list(fallback_citation_ids)
 
             # Clean text of citation brackets for analysis
             clean_text = re.sub(r"\[(EV\d+|citation-\d+)\]", "", s).strip()
             if not clean_text:
+                continue
+
+            # Skip the separated Sources header line itself
+            clean_lower = clean_text.lower().strip("*: \t\n,")
+            if clean_lower in ("sources", "source", "references", "reference") or clean_lower.startswith("sources:") or clean_lower.startswith("references:"):
                 continue
 
             # Determine claim type
@@ -315,7 +340,7 @@ class GroundingValidator:
             if not matching_ver:
                 issues.append("version_mismatch:claim=Third Edition")
 
-        amd_matches = re.findall(r"\b(?:Amendment|Amd)\s*(\d+)\b", claim.text, re.IGNORECASE)
+        amd_matches = re.findall(r"\b(?:Amendment|Amd)(?:\s+No\.?)?\s*([1-9]\d?)\b", claim.text, re.IGNORECASE)
         if amd_matches:
             for amd in amd_matches:
                 matching_amd = any(
@@ -477,6 +502,9 @@ class GroundingValidator:
         claims: List[AnswerClaim] = []
         if raw_claims:
             for idx, rc in enumerate(raw_claims, start=1):
+                if isinstance(rc, AnswerClaim):
+                    claims.append(rc)
+                    continue
                 cid = rc.get("claim_id") or f"C{idx}"
                 text = rc.get("text", "").strip()
                 if not text:
