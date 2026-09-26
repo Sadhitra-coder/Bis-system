@@ -62,6 +62,7 @@ _DOMAIN_FRAMING_WORDS = {
     "context", "found", "regarding", "authorities", "competent", "obtain", "precise", "exact",
     "missing", "channels", "formally", "accidental", "contact", "design", "live", "prevent",
     "setting", "settings", "device", "devices", "compatibility", "essential", "focus",
+    "intended", "electric", "lighting", "power", "protocols", "rating", "voltage",
     # Temporal, version, calendar, and structural formatting words
     "january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december",
     "jan", "feb", "mar", "apr", "jun", "jul", "aug", "sep", "sept", "oct", "nov", "dec",
@@ -560,12 +561,27 @@ class GroundingValidator:
             if not has_temporal_proof:
                 issues.append("unsupported_currentness_claim:publication_date_or_text_alone_does_not_establish_current_status")
 
-        # B. Supersession assertion requires explicit supersession language in source text
-        if _SUPERSESSION_CLAIM_PATTERN.search(claim.text):
+        # B. Supersession assertion requires explicit supersession language in source text or database record
+        if _SUPERSESSION_CLAIM_PATTERN.search(claim.text) and not is_footer_cited:
             has_supersession_proof = any(
                 any(w in (ev.source_content or ev.content).lower() for w in ["supersedes", "superseding", "in supersession of", "cancels and replaces"])
                 for ev in unique_citations
             )
+            if not has_supersession_proof and std_matches:
+                for s_num in std_matches:
+                    try:
+                        import sqlite3, os
+                        db_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "data", "knowledge", "bis_knowledge.db")
+                        if not os.path.exists(db_path):
+                            db_path = "data/knowledge/bis_knowledge.db"
+                        conn = sqlite3.connect(db_path, timeout=5.0)
+                        c = conn.cursor()
+                        c.execute("SELECT COUNT(*) FROM temporal_relationships WHERE relationship_type = 'SUPERSEDES' AND (source_standard_id LIKE ? OR target_standard_id LIKE ? OR context_text LIKE ?)", (f"%{s_num}%", f"%{s_num}%", f"%{s_num}%"))
+                        if c.fetchone()[0] > 0:
+                            has_supersession_proof = True
+                        conn.close()
+                    except Exception:
+                        pass
             if not has_supersession_proof:
                 issues.append("unsupported_supersession_claim:no_explicit_supersession_evidence")
 
