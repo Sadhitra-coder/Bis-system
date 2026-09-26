@@ -37,6 +37,7 @@ _STOPWORDS = {
     "must", "might", "this", "that", "these", "those", "it", "its", "as",
     "which", "who", "whom", "whose", "where", "why", "how", "since", "while",
     "also", "well", "both", "either", "neither", "though", "although", "even",
+    "they", "them", "their", "theirs", "itself", "themselves",
 }
 
 # Domain framing and structural words for technical regulatory prose
@@ -52,6 +53,15 @@ _DOMAIN_FRAMING_WORDS = {
     "used", "using", "uses", "use", "meet", "meets", "meeting", "met", "safe", "safety",
     "system", "systems", "types", "type", "method", "methods", "rules", "rule", "item", "items",
     "exist", "exists", "aspect", "aspects", "clear", "confirmed", "confirm", "confirms",
+    # Technical regulatory vocabulary & framing words
+    "scope", "scopes", "construction", "testing", "tests", "test", "criteria", "criterion",
+    "performance", "application", "applications", "material", "materials", "parameter", "parameters",
+    "purpose", "purposes", "commercial", "industrial", "domestic", "household", "households",
+    "equipment", "apparatus", "product", "products", "manufacture", "manufactured", "manufacturing",
+    "manufacturer", "manufacturers", "indicating", "necessary", "documentation", "established",
+    "context", "found", "regarding", "authorities", "competent", "obtain", "precise", "exact",
+    "missing", "channels", "formally", "accidental", "contact", "design", "live", "prevent",
+    "setting", "settings", "device", "devices", "compatibility", "essential", "focus",
     # Temporal, version, calendar, and structural formatting words
     "january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december",
     "jan", "feb", "mar", "apr", "jun", "jul", "aug", "sep", "sept", "oct", "nov", "dec",
@@ -219,7 +229,9 @@ class GroundingValidator:
             if any(p in lower for p in [
                 "not found in the retrieved", "could not find", "not specified in the retrieved",
                 "does not specify", "cannot be determined from the available", "unclear from the retrieved",
-                "no information was retrieved", "verification required",
+                "no information was retrieved", "verification required", "could not be established",
+                "not been formally confirmed", "missing", "unconfirmed", "not definitively confirmed",
+                "verification against the official", "precise details of clause", "exact text of clause",
             ]):
                 claim_type = ClaimType.UNCERTAINTY
             elif any(p in lower for p in ["suggests", "implies", "may indicate", "appears to", "it seems"]):
@@ -374,11 +386,18 @@ class GroundingValidator:
 
         # Check clause in claim: e.g. "Clause 4.1" or "Clause 6"
         clause_matches = re.findall(r"\bClause\s*(\d+(?:\.\d+)*)\b", claim.text, re.IGNORECASE)
-        if clause_matches:
+        if clause_matches and claim.claim_type != ClaimType.UNCERTAINTY:
             for cl in clause_matches:
                 matching_ev = any(
-                    (ev.clause_id and (ev.clause_id == cl or ev.clause_id.startswith(f"{cl}.") or cl in ev.clause_id))
-                    or (not ev.clause_id and bool(re.search(rf"\b(?:Clause|Cl\.?|Section|Sec\.?)\s*{re.escape(cl)}\b", ev.source_content or ev.content, re.IGNORECASE)))
+                    (ev.clause_id and (
+                        ev.clause_id == cl
+                        or cl.startswith(f"{ev.clause_id}.")
+                        or ev.clause_id.startswith(f"{cl}.")
+                        or ev.clause_id in cl
+                    ))
+                    or bool(re.search(rf"\b(?:Clause|Cl\.?|Section|Sec\.?)\s*{re.escape(cl)}\b", ev.source_content or ev.content or "", re.IGNORECASE))
+                    or (f"Clause {cl}" in (ev.source_content or ev.content or ""))
+                    or (f"clause {cl}" in (ev.source_content or ev.content or "").lower())
                     for ev in unique_citations
                 )
                 if not matching_ev:
@@ -411,9 +430,9 @@ class GroundingValidator:
             content_parts.append(ev.source_content or ev.content)
             if ev.standard_title:
                 content_parts.append(ev.standard_title)
-            elif ev.standard_number:
+            if ev.standard_number:
                 std_title = _get_standard_title(ev.standard_number)
-                if std_title:
+                if std_title and std_title not in content_parts:
                     content_parts.append(std_title)
             if ev.clause_title:
                 content_parts.append(ev.clause_title)
