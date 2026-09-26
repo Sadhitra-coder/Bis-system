@@ -1,10 +1,10 @@
 {
   "release_id": "corpus-release-0002",
   "manifest_version": "2.0.0",
-  "created_at": "2026-09-26T13:40:30.701885+00:00",
-  "git_commit": "c3b331733d09c5fce12d64781a1b4ac55dd56433",
+  "created_at": "2026-09-26T13:41:33.676408+00:00",
+  "git_commit": "99ac0d5777c5bba4de1fdedef0bfb687175cb485",
   "description": "Official Sealed BIS Knowledge Base Immutable Release v2 (479 chunks, 14 standard families / 18 versions, 25 catalog standards)",
-  "source_sync_timestamp": "2026-09-26T13:40:30.701885+00:00",
+  "source_sync_timestamp": "2026-09-26T13:41:33.676408+00:00",
   "metrics": {
     "standards_count": 14,
     "standard_versions_count": 18,
