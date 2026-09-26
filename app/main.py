@@ -224,9 +224,16 @@ def readiness_check(request: Request, response: Response):
     if not report.is_healthy:
         response.status_code = 503
 
+    from app.provenance import get_runtime_provenance
+    prov = get_runtime_provenance()
+
     return {
         "status": "ready" if report.is_healthy else "degraded",
         "pipeline_ready": getattr(state, "rag_pipeline", None) is not None,
+        "source_commit": prov["source_commit"],
+        "release_id": prov["release_id"],
+        "image_digest": prov["image_digest"],
+        "build_timestamp": prov["build_timestamp"],
         "index": report.to_dict(),
     }
 

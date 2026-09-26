@@ -24,12 +24,19 @@ def get_status(request: Request):
     is_llm_ready = bool(generator is not None and settings.llm_available)
     last_error = getattr(request.app.state, "llm_last_error", None)
 
+    from app.provenance import get_runtime_provenance
+    prov = get_runtime_provenance()
+
     return {
         "status": "ready" if chunks_count > 0 else "empty",
         "collection_name": settings.CHROMA_COLLECTION_NAME,
         "chunks_indexed": chunks_count,
         "llm_available": is_llm_ready,
         "llm_last_error": None if is_llm_ready else last_error,
+        "source_commit": prov["source_commit"],
+        "release_id": prov["release_id"],
+        "image_digest": prov["image_digest"],
+        "build_timestamp": prov["build_timestamp"],
         "models": {
             "embedding_model": settings.EMBEDDING_MODEL,
             "reranker_model": settings.RERANKER_MODEL,

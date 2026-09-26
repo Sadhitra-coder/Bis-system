@@ -92,6 +92,12 @@ class Settings(BaseSettings):
     # ---------------- Service-to-Service Security ----------------
     INTERNAL_SERVICE_KEY: Optional[str] = "complywise-internal-bis-key-default"
 
+    # ---------------- Release & Runtime Provenance ----------------
+    SOURCE_COMMIT: Optional[str] = None
+    RELEASE_ID: str = "corpus-release-0002"
+    IMAGE_DIGEST: Optional[str] = None
+    BUILD_TIMESTAMP: Optional[str] = None
+
     # ---------------- OpenAI / LLM ----------------
     # Structuring (ingestion) and answer generation (RAG) both
     # use OpenAI. They may run on different models.

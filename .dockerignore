@@ -1,16 +1,23 @@
 # Version control
 .git
+.git/**
 .github
+.github/**
 
 # Python caches and environments
-__pycache__/
+__pycache__
+**/__pycache__/**
 *.py[cod]
 *$py.class
-.pytest_cache/
+.pytest_cache
+.pytest_cache/**
 .coverage
-.venv/
-venv/
-env/
+.venv
+.venv/**
+venv
+venv/**
+env
+env/**
 
 # Environment files and credentials
 .env
@@ -18,19 +25,35 @@ env/
 !.env.example
 
 # IDE and temporary files
-.vscode/
-.idea/
+.vscode
+.vscode/**
+.idea
+.idea/**
 *.swp
 *.swo
 *~
-scratch/
+scratch
+scratch/**
 
 # Test artifacts and reports
-tests/
-docs/
+tests
+tests/**
+docs
+docs/**
 *.md
 
 # Heavy model cache already baked into base image
-model_cache/
-data/raw/
+model_cache
+model_cache/**
+**/model_cache/**
+
+# Raw data
+data/raw
+data/raw/**
+data/tmp
+data/tmp/**
+
+# Keep knowledge and vector db
 !data/knowledge/bis_knowledge.db
+!data/vector_db
+!data/vector_db/**
