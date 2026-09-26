@@ -6,10 +6,13 @@ Zero external services required; fully ACID-compliant, portable, and queryable.
 """
 
 import json
+import logging
 import sqlite3
 import threading
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+
+logger = logging.getLogger(__name__)
 
 from app.config import DATA_DIR
 from app.knowledge.models import (
@@ -60,8 +63,11 @@ class KnowledgeRepository:
         else:
             self._conn = sqlite3.connect(":memory:", check_same_thread=False)
         self._conn.row_factory = sqlite3.Row
-        self._init_db()
-        self._seed_baseline_graph()
+        try:
+            self._init_db()
+            self._seed_baseline_graph()
+        except sqlite3.OperationalError as e:
+            logger.warning("Knowledge database read-only; skipping write initialization: %s", e)
 
     def _init_db(self) -> None:
         with self._lock:

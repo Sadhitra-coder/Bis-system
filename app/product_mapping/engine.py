@@ -500,9 +500,9 @@ def generate_candidate_justification(
         order_ref = f"{order_name} ({order_num})" if order_num else order_name
         qco_text = f" Mandatory under {auth} {order_ref}."
     else:
-        qco_text = " Voluntary standard (no mandatory QCO identified in current records)."
+        qco_text = " Mandatory QCO not identified in active records; independent gazette verification advised."
 
-    return f"{candidate_standard_number}{title_suffix} applies because the query specifies {product_spec}{evidence_phrase}.{qco_text}"
+    return f"{candidate_standard_number}{title_suffix} is recommended as a candidate standard for {product_spec}{evidence_phrase}.{qco_text}"
 
 
 # ============================================================

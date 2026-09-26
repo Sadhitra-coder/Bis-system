@@ -67,6 +67,9 @@ _NUMBER_WORDS = {
     "eighteen": "18", "nineteen": "19", "twenty": "20",
 }
 
+# Devanagari to ASCII digit translation table
+_DEVANAGARI_DIGITS = str.maketrans("०१२३४५६७८९", "0123456789")
+
 
 def _stem(w: str) -> str:
     w = w.lower()
@@ -156,18 +159,18 @@ class GroundingValidator:
         if not text or not text.strip():
             return []
 
-        # Check for separated Sources line at the end (e.g. "Sources: [EV1], [EV2]")
-        sources_match = re.search(r"(?:Sources|References)\s*:\s*((?:\[(?:EV\d+|citation-\d+)\][,\s]*)+)", text, re.IGNORECASE)
+        # Check for separated Sources line at the end (e.g. "Sources: [EV1], [EV2]" or "स्रोत: [EV1], [EV2]")
+        sources_match = re.search(r"(?:Sources|References|स्रोत|संदर्भ)\s*:\s*((?:\[(?:EV\d+|citation-\d+)\][,\s]*)+)", text, re.IGNORECASE)
         fallback_citation_ids = []
         if sources_match:
             fallback_citation_ids = [c.upper() for c in re.findall(r"\[(EV\d+|citation-\d+)\]", sources_match.group(1), re.IGNORECASE)]
 
         # Strip trailing Sources / References block before splitting into claims
-        text_without_sources = re.sub(r"\n*(?:\*\*Sources:\*\*|Sources:|References:).*$", "", text, flags=re.DOTALL | re.IGNORECASE).strip()
+        text_without_sources = re.sub(r"\n*(?:\*\*Sources:\*\*|Sources:|References:|स्रोत:|संदर्भ:).*$", "", text, flags=re.DOTALL | re.IGNORECASE).strip()
 
         claims: List[AnswerClaim] = []
-        # Split by sentence boundaries, bullet items, or paragraph breaks
-        raw_sentences = re.split(r"(?<=[.!?])\s+|\n{2,}|\n(?=[-*•]|\d+\.)", text_without_sources)
+        # Split by sentence boundaries (including Hindi purna viram । and ॥), bullet items, or paragraph breaks
+        raw_sentences = re.split(r"(?<=[.!?।॥])\s+|\n{2,}|\n(?=[-*•]|\d+\.)", text_without_sources)
         claim_counter = 1
 
         for raw_s in raw_sentences:
@@ -197,15 +200,18 @@ class GroundingValidator:
 
             # Skip the separated Sources header line itself
             clean_lower = clean_text.lower().strip("*: \t\n,")
-            if clean_lower in ("sources", "source", "references", "reference") or clean_lower.startswith("sources:") or clean_lower.startswith("references:"):
+            if (
+                clean_lower in ("sources", "source", "references", "reference", "स्रोत", "संदर्भ")
+                or clean_lower.startswith(("sources:", "references:", "स्रोत:", "संदर्भ:"))
+            ):
                 continue
 
             # Skip consumer verification tip sentence (mandated by PRD R5, not technical claims)
-            if "bis care" in clean_lower or "authenticity of the isi mark" in clean_lower:
+            if any(k in clean_lower for k in ["bis care", "authenticity of the isi mark", "आधिकारिक बीआईएस केयर", "बीआईएस केयर", "आईएसआई मार्क", "isi मार्क"]):
                 continue
 
             # Skip editorial status headlines (e.g. "**Status: Currently in force**")
-            if clean_lower.startswith("status:") or clean_lower in ("currently in force", "verification required"):
+            if clean_lower.startswith("status:") or clean_lower in ("currently in force", "verification required", "स्थिति: वर्तमान में लागू", "सत्यापन आवश्यक"):
                 continue
 
             # Determine claim type
@@ -239,7 +245,13 @@ class GroundingValidator:
         """
         Extracts numbers, measurements, percentages, and quantities from text,
         ignoring standard numbers (e.g. IS 3055) and clause numbers (e.g. Clause 4.1).
+        Supports both ASCII and Devanagari numerals.
         """
+        if not text:
+            return []
+        # Normalize Devanagari digits (०-९) to ASCII digits (0-9)
+        text = text.translate(_DEVANAGARI_DIGITS)
+
         # Mask out standard numbers (IS XXXX:YYYY) and clauses (Clause X.X)
         masked = re.sub(r"\bIS\s*\d+(?:\s*[:/ -]\s*\d{4})?\b", " ", text, flags=re.IGNORECASE)
         masked = re.sub(r"\bClause\s*\d+(?:\.\d+)*\b", " ", masked, flags=re.IGNORECASE)
@@ -257,7 +269,7 @@ class GroundingValidator:
             results.append(m.group(0).lower().strip())
 
         # Isolated quantities / numbers
-        num_pattern = re.compile(r"\b\d{1,3}(?:,\d{3})*(?:\.\d+)?\b")
+        num_pattern = re.compile(r"\b(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?\b")
         for m in num_pattern.finditer(masked):
             val = m.group(0)
             if val not in [r.split()[0] for r in results]:
@@ -364,12 +376,9 @@ class GroundingValidator:
         clause_matches = re.findall(r"\bClause\s*(\d+(?:\.\d+)*)\b", claim.text, re.IGNORECASE)
         if clause_matches:
             for cl in clause_matches:
-                cl_has_dot = "." in cl
                 matching_ev = any(
                     (ev.clause_id and (ev.clause_id == cl or ev.clause_id.startswith(f"{cl}.") or cl in ev.clause_id))
-                    or bool(re.search(rf"\b(?:Clause|Cl\.?|Section|Sec\.?|see|per)?\s*{re.escape(cl)}\b", ev.source_content or ev.content, re.IGNORECASE))
-                    or (cl_has_dot and bool(re.search(rf"\b{re.escape(cl)}\b", ev.source_content or ev.content)))
-                    or bool(re.search(rf"\b{re.escape(cl)}\s+(?:of\s+IS|shall|is|are|RATING|CLASSIFICATION|[A-Z]{{3,}})\b", ev.source_content or ev.content, re.IGNORECASE))
+                    or (not ev.clause_id and bool(re.search(rf"\b(?:Clause|Cl\.?|Section|Sec\.?)\s*{re.escape(cl)}\b", ev.source_content or ev.content, re.IGNORECASE)))
                     for ev in unique_citations
                 )
                 if not matching_ev:
@@ -422,45 +431,44 @@ class GroundingValidator:
 
         is_footer_cited = getattr(claim, "uses_footer_citations", False)
 
-        if not is_non_latin_claim:
-            quantities = cls.extract_numbers_and_quantities(claim.text)
-            masked_source = re.sub(r"\bIS\s*\d+(?:\s*[:/ -]\s*\d{4})?\b", " ", combined_source_content, flags=re.IGNORECASE)
-            masked_source = re.sub(r"\bClause\s*\d+(?:\.\d+)*\b", " ", masked_source, flags=re.IGNORECASE)
+        quantities = cls.extract_numbers_and_quantities(claim.text)
+        masked_source = re.sub(r"\bIS\s*\d+(?:\s*[:/ -]\s*\d{4})?\b", " ", combined_source_content, flags=re.IGNORECASE)
+        masked_source = re.sub(r"\bClause\s*\d+(?:\.\d+)*\b", " ", masked_source, flags=re.IGNORECASE)
 
-            source_clean = combined_source_content.replace(",", "")
-            masked_source_clean = masked_source.replace(",", "")
+        source_clean = combined_source_content.replace(",", "")
+        masked_source_clean = masked_source.replace(",", "")
 
-            for qty in quantities:
-                qty_lower = qty.lower()
-                qty_clean = qty_lower.replace(",", "")
-                if qty_lower not in combined_source_content and qty_clean not in source_clean:
-                    parts = qty_clean.split()
-                    if len(parts) == 2:
-                        num, unit = parts
-                        unit_stem = unit.rstrip("s")
-                        num_pattern = re.compile(rf"\b{re.escape(num)}\b")
-                        if is_footer_cited:
-                            # For footer-cited claims: only require the bare number appears
-                            # in source — don't penalise differing unit format
-                            if not num_pattern.search(masked_source_clean) and not num_pattern.search(source_clean):
-                                issues.append(f"unsupported_numerical_value:{qty}")
-                        else:
-                            if (unit_stem not in source_clean and unit not in source_clean) or not num_pattern.search(masked_source_clean):
-                                issues.append(f"unsupported_numerical_value:{qty}")
-                    else:
-                        num_pattern = re.compile(rf"\b{re.escape(qty_clean)}\b")
-                        is_metadata_year = (
-                            len(qty_clean) == 4
-                            and qty_clean.isdigit()
-                            and any(
-                                str(getattr(ev, "standard_year", None) or "") == qty_clean
-                                or qty_clean in (getattr(ev, "standard_number", None) or "")
-                                or qty_clean in source_clean
-                                for ev in unique_citations
-                            )
-                        )
-                        if not is_metadata_year and not num_pattern.search(masked_source_clean) and not num_pattern.search(source_clean):
+        for qty in quantities:
+            qty_lower = qty.lower()
+            qty_clean = qty_lower.replace(",", "")
+            if qty_lower not in combined_source_content and qty_clean not in source_clean:
+                parts = qty_clean.split()
+                if len(parts) == 2:
+                    num, unit = parts
+                    unit_stem = unit.rstrip("s")
+                    num_pattern = re.compile(rf"\b{re.escape(num)}\b")
+                    if is_footer_cited or is_non_latin_claim:
+                        # For footer-cited or non-Latin claims: only require the bare number appears
+                        # in source — don't penalise differing unit format or translated units
+                        if not num_pattern.search(masked_source_clean) and not num_pattern.search(source_clean):
                             issues.append(f"unsupported_numerical_value:{qty}")
+                    else:
+                        if (unit_stem not in source_clean and unit not in source_clean) or not num_pattern.search(masked_source_clean):
+                            issues.append(f"unsupported_numerical_value:{qty}")
+                else:
+                    num_pattern = re.compile(rf"\b{re.escape(qty_clean)}\b")
+                    is_metadata_year = (
+                        len(qty_clean) == 4
+                        and qty_clean.isdigit()
+                        and any(
+                            str(getattr(ev, "standard_year", None) or "") == qty_clean
+                            or qty_clean in (getattr(ev, "standard_number", None) or "")
+                            or qty_clean in source_clean
+                            for ev in unique_citations
+                        )
+                    )
+                    if not is_metadata_year and not num_pattern.search(masked_source_clean) and not num_pattern.search(source_clean):
+                        issues.append(f"unsupported_numerical_value:{qty}")
 
         # 7. Semantic / Content Support
         # Check token overlap between claim and cited source_content.
@@ -468,8 +476,8 @@ class GroundingValidator:
         # English source content produces meaningless results.
         # Footer-cited claims get a relaxed threshold (document-level attribution is
         # inherently less granular than per-sentence inline citation).
-        overlap_threshold_hard = 0.25 if is_footer_cited else 0.40
-        overlap_threshold_soft = 0.45 if is_footer_cited else 0.60
+        overlap_threshold_hard = 0.25 if is_footer_cited else 0.50
+        overlap_threshold_soft = 0.45 if is_footer_cited else 0.70
 
         claim_words = {} if is_non_latin_claim else {
             w for w in re.findall(r"\b[a-zA-Z]{3,}\b", claim.text.lower())
@@ -495,7 +503,7 @@ class GroundingValidator:
             overlap_ratio = len(matched_words) / len(claim_words)
             missing_ratio = len(unsupported_words) / len(claim_words)
 
-            if overlap_ratio < overlap_threshold_hard or missing_ratio >= 0.60:
+            if overlap_ratio < overlap_threshold_hard or missing_ratio >= (0.60 if is_footer_cited else 0.50):
                 issues.append(f"unsupported_terms:missing={','.join(sorted(unsupported_words))}")
             elif overlap_ratio < overlap_threshold_soft:
                 issues.append(f"partial_content_support:overlap={overlap_ratio:.2f}")
@@ -570,7 +578,10 @@ class GroundingValidator:
                 missing_terms_count = len(iss.split("=")[1].split(","))
 
         has_specific_entities = bool(quantities or clause_matches or std_matches)
-        severe_terms_gap = (missing_terms_count >= 4 and has_specific_entities)
+        severe_terms_gap = (
+            (missing_terms_count >= 4 and has_specific_entities)
+            or (missing_terms_count >= 3 and not is_footer_cited)
+        )
 
         has_severe_issues = any(
             iss.startswith("fake_or_unknown_citation_id")
@@ -578,6 +589,7 @@ class GroundingValidator:
             or iss.startswith("unsupported_numerical_value")
             or iss.startswith("unsupported_negative_assertion")
             or iss.startswith("unsupported_legal_conclusion")
+            or (iss.startswith("unsupported_terms") and claim.claim_type == ClaimType.FACT and not is_footer_cited)
             or severe_terms_gap
             or iss.startswith("unsupported_currentness_claim")
             or iss.startswith("unsupported_supersession_claim")
@@ -650,18 +662,32 @@ class GroundingValidator:
                     )
                 )
 
-        if not claims and answer:
+        if raw_claims and answer:
+            # Dual-pass extraction reconciliation: ensure all substantive sentences in answer are accounted for
+            extracted = cls.extract_claims_from_text(answer)
+            existing_texts = [c.text.lower() for c in claims]
+            for ec in extracted:
+                ec_clean = ec.text.lower()
+                if not any(ec_clean in et or et in ec_clean for et in existing_texts):
+                    ec.claim_id = f"C{len(claims) + 1}"
+                    claims.append(ec)
+                    existing_texts.append(ec_clean)
+        elif not claims and answer:
             claims = cls.extract_claims_from_text(answer)
 
         # Normalize boilerplate consumer guidance and headline claims
         for claim in claims:
             txt_lower = claim.text.lower().strip("*: \t\n,")
-            if "bis care" in txt_lower or "authenticity of the isi mark" in txt_lower:
+            if any(k in txt_lower for k in ["bis care", "authenticity of the isi mark", "आधिकारिक बीआईएस केयर", "बीआईएस केयर", "आईएसआई मार्क", "isi मार्क"]):
                 claim.claim_type = ClaimType.INTERPRETATION
                 claim.support_status = SupportStatus.SUPPORTED
                 claim.issues = []
                 claim.validation_notes = "Official consumer guidance notice."
-            elif txt_lower.startswith("status:") or txt_lower in ("currently in force", "verification required"):
+            elif (
+                txt_lower.startswith("status:")
+                or txt_lower.startswith("स्थिति:")
+                or any(k in txt_lower for k in ("currently in force", "verification required", "वर्तमान में लागू", "सत्यापन आवश्यक"))
+            ):
                 claim.claim_type = ClaimType.INTERPRETATION
                 claim.support_status = SupportStatus.SUPPORTED
                 claim.issues = []

@@ -18,8 +18,8 @@ The engine transforms raw Indian Standards (IS), Gazette notifications, Quality 
 | :--- | :--- |
 | **Live Endpoint** | `https://bis-system-v5-korea.yellowmeadow-d3173c9a.koreacentral.azurecontainerapps.io/query` |
 | **Health Check** | `https://bis-system-v5-korea.yellowmeadow-d3173c9a.koreacentral.azurecontainerapps.io/health` |
-| **Disk Diagnostic** | `https://bis-system-v5-korea.yellowmeadow-d3173c9a.koreacentral.azurecontainerapps.io/diag/disk` |
-| **Authentication** | `X-Internal-Service-Key: TZ58/H94QYWDuvMgRmhdBb1gxVoQihpn4FcEtwhPmNQ=` |
+| **Disk Diagnostic** | `https://bis-system-v5-korea.yellowmeadow-d3173c9a.koreacentral.azurecontainerapps.io/status/disk` |
+| **Authentication** | `X-Internal-Service-Key: <CONFIGURED_IN_ENVIRONMENT>` (Required on `/query`, `/upload`, `/jobs`) |
 | **Azure Resource Group** | `Storyvord-Test` (Korea Central) |
 | **Container App** | `bis-system-v5-korea` |
 | **Container Registry** | `complywiseacr.azurecr.io/bis-system-v5` |

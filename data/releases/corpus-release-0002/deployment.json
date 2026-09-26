@@ -1,0 +1,41 @@
+{
+  "release_id": "corpus-release-0002",
+  "timestamp": "2026-09-26T00:36:40+05:30",
+  "git_commit": "b0c7f09aa077b0a0a2117c5e7a979843c06a087a",
+  "build_commit": "dd2ab1a5f64b4c74fa3e93655df0e7b8e5c46430",
+  "image_tag": "complywiseacr.azurecr.io/bis-system-v5:v19",
+  "status": "DEPLOYED",
+  "provenance_resolution": {
+    "git_head": "b0c7f09",
+    "git_head_description": "docs: correct PRD R1-R8 traceability matrix and document grounding calibration",
+    "deployed_image_build_commit": "dd2ab1a",
+    "deployed_image_description": "fix(grounding): fix SQLite column name standard_title in _get_standard_title",
+    "commit_delta_analysis": "HEAD commit b0c7f09 contains only documentation updates (README.md and CHANGELOG.md) on top of build commit dd2ab1a. Application code, RAG pipeline, and indexing code in the deployed image v19 are bit-for-bit identical to HEAD code.",
+    "live_index_verified_chunks": 479,
+    "live_index_standards_count": 19,
+    "stale_release_manifest_superseded": "corpus-release-0001 (193 chunks, commit d1b0ecd)"
+  },
+  "azure_deployment": {
+    "resource_group": "Storyvord-Test",
+    "region": "koreacentral",
+    "container_app_name": "bis-system-v5-korea",
+    "fqdn": "bis-system-v5-korea.yellowmeadow-d3173c9a.koreacentral.azurecontainerapps.io",
+    "target_port": 8001,
+    "cpu": "2.0",
+    "memory": "4.0Gi",
+    "image": "complywiseacr.azurecr.io/bis-system-v5:v19",
+    "endpoints": {
+      "query": "https://bis-system-v5-korea.yellowmeadow-d3173c9a.koreacentral.azurecontainerapps.io/query",
+      "health": "https://bis-system-v5-korea.yellowmeadow-d3173c9a.koreacentral.azurecontainerapps.io/health",
+      "ready": "https://bis-system-v5-korea.yellowmeadow-d3173c9a.koreacentral.azurecontainerapps.io/ready",
+      "status": "https://bis-system-v5-korea.yellowmeadow-d3173c9a.koreacentral.azurecontainerapps.io/status",
+      "playground": "https://bis-system-v5-korea.yellowmeadow-d3173c9a.koreacentral.azurecontainerapps.io/playground"
+    }
+  },
+  "verification": {
+    "status": "PASSED",
+    "scenarios_passed": 6,
+    "scenarios_total": 6,
+    "evidence_file": "live_verification_results.json"
+  }
+}

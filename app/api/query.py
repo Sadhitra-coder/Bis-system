@@ -15,6 +15,7 @@ searched the entire corpus while receiving a 200 that looked correct.
     saying so is the only honest option — see _UNSUPPORTED_SCOPE_DETAIL.
 """
 
+import inspect
 import logging
 
 from fastapi import APIRouter, HTTPException, Request
@@ -132,6 +133,12 @@ def query_documents(payload: QueryRequest, request: Request):
             kwargs["audience"] = payload.audience
         if payload.manufacturer_origin is not None:
             kwargs["manufacturer_origin"] = payload.manufacturer_origin
+
+        # Safely pass only parameters supported by rag_pipeline.query (or all if **kwargs is accepted)
+        sig = inspect.signature(rag_pipeline.query)
+        has_var_kw = any(p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values())
+        if not has_var_kw:
+            kwargs = {k: v for k, v in kwargs.items() if k in sig.parameters}
 
         if top_k is None:
             result = rag_pipeline.query(payload.query, **kwargs)

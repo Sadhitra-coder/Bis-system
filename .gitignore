@@ -25,6 +25,7 @@ data/markdown/
 data/normalized/
 data/structured/
 data/chroma_db/
+data/chroma/
 *.backup*
 *.preflight-backup*
 

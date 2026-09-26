@@ -516,13 +516,14 @@
 
       // Badges
       const confScore = Math.round((data.confidence_score || 0) * 100);
-      const isVerified = !data.verification_required && data.decision !== 'ABSTAINED';
-      const groundingBadge = data.grounding_status === 'GROUNDED' 
+      const isVerified = !data.verification_required && data.decision !== 'verification_required';
+      const isGrounded = data.grounding_status === 'fully_grounded' || data.grounding_status === 'GROUNDED';
+      const groundingBadge = isGrounded
         ? '<span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">GROUNDED EVIDENCE</span>'
         : '<span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20">PARTIALLY GROUNDED</span>';
 
       const confBadge = `<span class="px-2 py-0.5 rounded text-[10px] font-mono bg-slate-800 text-slate-300 border border-slate-700">CONFIDENCE: ${confScore}%</span>`;
-      const temporalPill = `<span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-blue-500/10 text-blue-400 border border-blue-500/20">STATUS: ${escapeHtml(data.temporal_status || 'CURRENT')}</span>`;
+      const temporalPill = `<span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-blue-500/10 text-blue-400 border border-blue-500/20">STATUS: ${escapeHtml((data.temporal_status || 'CURRENT').toUpperCase())}</span>`;
 
       // Verification Required Alert Box
       let alertBox = '';
@@ -545,7 +546,7 @@
           <div class="p-3 rounded-lg bg-slate-950 border border-slate-800/80 text-xs space-y-1.5">
             <div class="flex items-center justify-between">
               <span class="font-semibold text-emerald-400">${escapeHtml(s.standard_number || 'Official Indian Standard')}</span>
-              <span class="text-[10px] text-slate-400 font-mono">Page ${s.page_number || 'N/A'} • Clause ${escapeHtml(s.clause_number || 'N/A')}</span>
+              <span class="text-[10px] text-slate-400 font-mono">Page ${s.page_number || s.page_start || 'N/A'} • Clause ${escapeHtml(s.clause_number || s.clause_id || 'N/A')}</span>
             </div>
             <p class="text-slate-300 italic text-[11px] bg-slate-900/80 p-2 rounded border border-slate-800">
               "${escapeHtml(s.text ? s.text.substring(0, 240) + '...' : 'Direct clause quote')}"

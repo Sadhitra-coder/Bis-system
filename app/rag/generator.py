@@ -690,6 +690,11 @@ Now provide the final JSON response.
 
         answer, raw_claims = self._parse_structured_output(response_text)
 
+        # Enforce strict clause suppression for consumer audience (PRD R5)
+        if (audience or "technical").lower().strip() == "consumer":
+            answer = re.sub(r"\bClause\s*\d+(?:\.\d+)*\b", "", answer, flags=re.IGNORECASE)
+            answer = re.sub(r"[ \t]{2,}", " ", answer)
+
         # ----------------------------------------------------
         # RETURN RESULT
         # ----------------------------------------------------

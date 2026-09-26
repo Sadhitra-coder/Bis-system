@@ -6,11 +6,18 @@ Endpoint: https://bis-system-v5-korea.yellowmeadow-d3173c9a.koreacentral.azureco
 """
 
 import json
+import os
 import urllib.request
 import urllib.error
 
 ENDPOINT = "https://bis-system-v5-korea.yellowmeadow-d3173c9a.koreacentral.azurecontainerapps.io/query"
-API_KEY = "TZ58/H94QYWDuvMgRmhdBb1gxVoQihpn4FcEtwhPmNQ="
+# Key must be supplied via environment variable; do not hardcode secrets in source or scripts
+API_KEY = os.environ.get("INTERNAL_SERVICE_KEY")
+if not API_KEY:
+    raise ValueError(
+        "INTERNAL_SERVICE_KEY environment variable is required to run verification. "
+        "Please set INTERNAL_SERVICE_KEY before executing."
+    )
 
 TEST_CASES = [
     ("WS1 - Test 1: IS 9873 Version Status", {"query": "is IS 9873 still current, or has it been revised?", "audience": "technical"}),

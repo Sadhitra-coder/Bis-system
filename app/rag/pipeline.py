@@ -327,16 +327,18 @@ class RAGPipeline:
         query_context: Any = None,
         candidate_standards: Optional[List[Dict[str, Any]]] = None,
         product_context: Optional[Any] = None,
+        audience: str = "technical",
     ) -> Tuple[str, List[Dict[str, Any]]]:
         """
         Synthesizes a rich, structured compliance answer directly from the
         authoritative retrieved BIS evidence passages when an external LLM
-        generator is not active.
+        generator is not active. Supports both technical and consumer audiences.
         """
+        mode = (audience or "technical").lower().strip()
         if not evidence_items:
             empty_ans = (
                 f"### ⚠️ No Direct Regulatory Provisions Found\n\n"
-                f"No matching clauses or requirements were found in the current BIS corpus for: *\"{query}\"*. "
+                f"No matching requirements were found in the current BIS corpus for: *\"{query}\"*. "
                 f"Please verify against authoritative BIS standards publications."
             )
             return empty_ans, []
@@ -362,34 +364,61 @@ class RAGPipeline:
 
         if is_verification_req or decision_val == "verification_required":
             reason = getattr(confidence, "verification_reason", None) or "Evidence requires regulatory cross-reference."
-            parts.append(f"### ⚠️ Verification Required\n\n**Notice:** {reason}\n")
-            parts.append("The specific standard or clause could not be definitively verified in the active index. However, the following related provisions and context were retrieved from the BIS corpus:\n")
+            if mode == "consumer":
+                parts.append(f"**Status: Verification Required (Unconfirmed Currentness)**\n\nNotice: {reason}\n")
+            else:
+                parts.append(f"### ⚠️ Verification Required\n\n**Notice:** {reason}\n")
+            parts.append("The specific standard or requirement could not be definitively verified in the active index. However, the following related provisions were retrieved from the BIS corpus:\n")
         elif decision_val == "qualified_answer":
-            parts.append(f"### Qualified Regulatory Findings: **{std_num}**\n")
+            if mode == "consumer":
+                parts.append(f"**{std_num} specifies safety and quality standards for consumer products.**\n")
+            else:
+                parts.append(f"### Qualified Regulatory Findings: **{std_num}**\n")
             if std_title:
                 parts.append(f"*{std_title}*\n")
             parts.append("The following provisions were retrieved with moderate confidence from official BIS documentation:\n")
         else:
-            parts.append(f"### Official Requirements & Regulatory Findings: **{std_num}**\n")
+            if mode == "consumer":
+                parts.append(f"**{std_num} establishes essential consumer safety and quality requirements.**\n")
+            else:
+                parts.append(f"### Official Requirements & Regulatory Findings: **{std_num}**\n")
             if std_title:
                 parts.append(f"*{std_title}*\n")
-            parts.append("The following mandatory technical specifications, test procedures, and compliance mandates were extracted directly from the authoritative BIS standard:\n")
+            if mode == "consumer":
+                parts.append(f"The standard establishes quality, safety, and testing requirements to protect consumers:\n")
+            else:
+                parts.append("The following mandatory technical specifications, test procedures, and compliance mandates were extracted directly from the authoritative BIS standard:\n")
 
         # Extract requirements and assemble claims
         for idx, item in enumerate(unique_items[:4], start=1):
             ev_id = f"EV{idx}"
-            clause_heading = item.clause_title or (f"Clause {item.clause_id}" if item.clause_id else f"Requirement Section {idx}")
-            page_info = f" (Page {item.page_start})" if item.page_start else ""
+            if mode == "consumer":
+                # Clause suppression in consumer mode: omit clause numbers
+                heading = item.clause_title or "Quality and Safety Requirement"
+                clause_heading = re.sub(r"\bClause\s*\d+(?:\.\d+)*\b", "", heading, flags=re.IGNORECASE).strip()
+                if not clause_heading:
+                    clause_heading = f"Quality and Safety Feature {idx}"
+                page_info = ""
+            else:
+                clause_heading = item.clause_title or (f"Clause {item.clause_id}" if item.clause_id else f"Requirement Section {idx}")
+                page_info = f" (Page {item.page_start})" if item.page_start else ""
+
             clean_content = (item.source_content or item.content or "").strip()
+            if mode == "consumer":
+                # Sanitize any inline clause numbers from consumer explanation
+                clean_content = re.sub(r"\bClause\s*\d+(?:\.\d+)*\b", "", clean_content, flags=re.IGNORECASE)
 
             # Clean content lines
             lines = [l.strip() for l in clean_content.splitlines() if l.strip()]
             display_text = "\n".join(lines[:14])
             if len(lines) > 14:
-                display_text += "\n*(additional clauses and test tables in source document)*"
+                display_text += "\n*(additional requirements in source document)*"
 
-            parts.append(f"#### {idx}. {clause_heading}{page_info} [{ev_id}]\n")
-            parts.append(f"{display_text}\n")
+            if mode == "consumer":
+                parts.append(f"- **{clause_heading}**: {display_text}\n")
+            else:
+                parts.append(f"#### {idx}. {clause_heading}{page_info} [{ev_id}]\n")
+                parts.append(f"{display_text}\n")
 
             # Formulate claim for GroundingValidator
             first_sentence = lines[0] if lines else clause_heading
@@ -402,16 +431,23 @@ class RAGPipeline:
                 "citation_ids": [ev_id],
             })
 
-        # Add Compliance Summary Footer
-        conf_pct = round(getattr(confidence, "score", 0.0) * 100, 1)
-        level_val = getattr(confidence.level, "value", str(confidence.level))
-        parts.append(
-            f"---\n"
-            f"**Compliance Summary:** Standard: `{std_num}` | "
-            f"Decision: `{decision_val}` | "
-            f"Confidence: `{conf_pct}% ({level_val})` | "
-            f"Authority: `Bureau of Indian Standards (BIS)`"
-        )
+        cits_line = ", ".join(f"[EV{i}]" for i in range(1, min(len(unique_items), 4) + 1))
+        if mode == "consumer":
+            # Mandatory PRD R5 BIS Care mobile app verification tip
+            parts.append("Consumers can verify the authenticity of the ISI mark or license validity using the official BIS Care mobile app.\n")
+            parts.append(f"Sources: {cits_line}")
+        else:
+            # Compliance Summary Footer for technical mode
+            conf_pct = round(getattr(confidence, "score", 0.0) * 100, 1)
+            level_val = getattr(confidence.level, "value", str(confidence.level))
+            parts.append(
+                f"---\n"
+                f"**Compliance Summary:** Standard: `{std_num}` | "
+                f"Decision: `{decision_val}` | "
+                f"Confidence: `{conf_pct}% ({level_val})` | "
+                f"Authority: `Bureau of Indian Standards (BIS)`\n\n"
+                f"Sources: {cits_line}"
+            )
 
         return "\n\n".join(parts), raw_claims
 
@@ -1025,13 +1061,22 @@ class RAGPipeline:
             scheme_recommendation_dict = scheme_rec.to_dict()
             answer = scheme_rec.to_formatted_answer()
 
-            # Authoritative regulatory evidence item
+            # Authoritative regulatory evidence item derived from database facts
+            raw_desc = scheme_rec.raw_scheme_info.get("description") or scheme_rec.explanation
+            raw_basis = scheme_rec.raw_scheme_info.get("statutory_basis") or "Bureau of Indian Standards Act, 2016"
+            scheme_source_content = (
+                f"Statutory Scheme: {scheme_rec.scheme_name} ({scheme_rec.scheme_code})\n"
+                f"Statutory Basis: {raw_basis}\n"
+                f"Mandatory Quality Control Order: {scheme_rec.qco_number or 'None'}\n"
+                f"Regulatory Provisions: {raw_desc}\n"
+                f"Conformity Requirements:\n" + "\n".join(f"- {d}" for d in scheme_rec.details)
+            )
             scheme_ev = EvidenceItem(
                 chunk_id=f"scheme_{scheme_rec.scheme_code}",
                 document_id="BIS_CONFORMITY_ASSESSMENT_REGULATIONS_2018",
                 source_file="BIS_Conformity_Assessment_Regulations_2018.pdf",
-                source_content=answer,
-                content=answer,
+                source_content=scheme_source_content,
+                content=scheme_source_content,
                 standard_id=target_std or scheme_rec.scheme_code,
                 standard_number=target_std or scheme_rec.scheme_code,
                 standard_title=scheme_rec.scheme_name,
@@ -1079,13 +1124,24 @@ class RAGPipeline:
             certification_checklist_dict = cert_checklist.to_dict()
             answer = cert_checklist.to_formatted_answer()
 
-            # Authoritative process evidence item
+            # Authoritative process evidence item derived from repository roadmap
+            steps_text = "\n".join(
+                f"Step {s.step_number}: {s.title}. {s.description}. Documents: {', '.join(s.key_documents)}. Notes: {', '.join(s.compliance_notes)}"
+                for s in cert_checklist.steps
+            )
+            labs_text = "; ".join(f"{l.get('name')} ({l.get('location')})" for l in cert_checklist.laboratories) if cert_checklist.laboratories else "BIS Central and Regional Testing Laboratories"
+            proc_source_content = (
+                f"Conformity Assessment Journey for {cert_checklist.standard_number}: {cert_checklist.standard_title}\n"
+                f"Applicable Scheme: {cert_checklist.scheme_name}\n"
+                f"Official Process Roadmap:\n{steps_text}\n"
+                f"Recognized Testing Laboratories: {labs_text}"
+            )
             proc_ev = EvidenceItem(
                 chunk_id=f"process_{target_std or 'certification'}",
                 document_id="BIS_CONFORMITY_ASSESSMENT_JOURNEY",
                 source_file="BIS_Certification_Process_Checklist.pdf",
-                source_content=answer,
-                content=answer,
+                source_content=proc_source_content,
+                content=proc_source_content,
                 standard_id=target_std or "BIS_CERTIFICATION",
                 standard_number=target_std or "BIS Conformity Assessment",
                 standard_title=cert_checklist.standard_title,
@@ -1211,6 +1267,7 @@ class RAGPipeline:
                     query_context=query_context,
                     candidate_standards=candidate_standards_list,
                     product_context=product_context_obj,
+                    audience=audience,
                 )
 
             generation_result = {
@@ -1326,7 +1383,30 @@ class RAGPipeline:
                     description="english answer translation to hindi"
                 ).strip()
                 if hindi_ans:
-                    answer = hindi_ans
+                    from app.rag.translation_verifier import TranslationIntegrityVerifier
+                    ver_result = TranslationIntegrityVerifier.verify_and_repair(
+                        english_answer=answer,
+                        hindi_answer=hindi_ans,
+                        audience=audience,
+                    )
+                    if ver_result.is_valid:
+                        answer = ver_result.repaired_hindi_answer
+                        # Synchronize claims list with verified Hindi answer
+                        hindi_claims = GroundingValidator.extract_claims_from_text(answer)
+                        if hindi_claims:
+                            claims = [c.to_dict() for c in hindi_claims]
+                        logger.info("Hindi answer passed post-translation integrity verification.")
+                    else:
+                        logger.warning(
+                            "Hindi translation failed integrity verification (%s); retaining verified English answer.",
+                            ", ".join(ver_result.issues),
+                        )
+                        # Retain English answer and add bilingual safety notice
+                        answer = (
+                            f"{answer}\n\n"
+                            f"*(नोट: तकनीकी और संख्यात्मक सटीकता सुनिश्चित करने के लिए आधिकारिक अंग्रेजी उत्तर प्रस्तुत किया गया है। "
+                            f"/ Note: Verified English answer retained to ensure regulatory and numerical integrity: {'; '.join(ver_result.issues)}.)*"
+                        )
             except Exception as e:
                 logger.warning("Failed to translate answer to Hindi: %s", e)
 

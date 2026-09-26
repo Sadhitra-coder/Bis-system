@@ -385,6 +385,12 @@ def source_to_dict(identity: SourceIdentity) -> Dict[str, Any]:
         if value is not None:
             source[key] = value
 
+    # Aliases for frontend/consumer compatibility
+    if identity.page_start is not None:
+        source["page_number"] = identity.page_start
+    if identity.clause_id is not None:
+        source["clause_number"] = identity.clause_id
+
     source["citation"] = identity.citation()
     return source
 

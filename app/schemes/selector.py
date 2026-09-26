@@ -304,24 +304,25 @@ def select_certification_scheme(
             raw_scheme_info=scheme_info,
         )
 
-    # 5. Non-Mandatory / No QCO -> Voluntary Scheme I (ISI)
+    # 5. Non-Mandatory / No QCO -> Scheme I (Standard Mark / Verification Advised)
     scheme_info = all_schemes.get("SCHEME-I") or all_schemes.get("SCHEME_1") or all_schemes.get("scheme_1_isi", {})
-    headline = "**Recommended Scheme: Scheme I - Voluntary Standard Mark (ISI Mark)**"
+    headline = "**Recommended Scheme: Scheme I - Standard Mark (Voluntary / Verification Required)**"
     explanation = (
-        f"Standard {std_clean or 'this specification'} is currently not governed by any mandatory Quality Control Order (QCO) "
-        f"issued by the Central Government. Certification under this standard is entirely voluntary. Manufacturers are legally "
-        f"permitted to produce and sell without a BIS license, but voluntary certification provides recognized third-party quality assurance."
+        f"Standard {std_clean or 'this specification'} is not listed under active mandatory Quality Control Orders (QCOs) "
+        f"in the indexed local regulatory records. Where no mandatory Central Government QCO applies, certification operates under "
+        f"voluntary Scheme I. However, statutory mandate status must be verified against current Gazette of India notifications, "
+        f"as new QCOs are continuously gazetted by Central Ministries under Section 16 of the BIS Act, 2016."
     )
     details = [
-        "Applicable Scheme: Scheme I - Standard Mark (Voluntary Certification)",
-        f"Governing Standard: {std_clean or 'Voluntary Indian Standard'}",
-        "Legal Status: Voluntary (No mandatory Quality Control Order is currently in force for this product).",
-        "Business Rationale: Demonstrates compliance with national quality benchmarks, enhances consumer trust, and satisfies institutional procurement and tender criteria.",
-        "Application Route: Manufacturers can voluntarily apply via the Manakonline portal for an ISI Mark license under Scheme I."
+        "Applicable Scheme: Scheme I - Standard Mark (Conformity Assessment)",
+        f"Governing Standard: {std_clean or 'Indian Standard'}",
+        "Statutory Mandate: No mandatory QCO identified in indexed records; independent gazette verification advised.",
+        "Business Rationale: Demonstrates compliance with national quality benchmarks, enhances consumer trust, and satisfies institutional procurement criteria.",
+        "Application Route: Manufacturers can apply via the Manakonline portal for an ISI Mark license under Scheme I."
     ]
     return SchemeRecommendation(
         scheme_code="SCHEME-I-VOLUNTARY",
-        scheme_name="Scheme I - Standard Mark (Voluntary)",
+        scheme_name="Scheme I - Standard Mark (Voluntary / Verification Advised)",
         is_mandatory=False,
         qco_number=None,
         qco_title=None,
