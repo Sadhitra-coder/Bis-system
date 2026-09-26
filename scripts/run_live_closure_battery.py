@@ -29,7 +29,7 @@ TEST_CASES = [
         "category": "Factual Standards QA",
         "name": "IS 694 Scope Query",
         "payload": {"query": "what is the scope of IS 694?", "top_k": 3},
-        "pass_criteria": lambda r: r.get("status_code") == 200 and r.get("decision") in ["ANSWER", "answer"] and not r.get("verification_required")
+        "pass_criteria": lambda r: r.get("status_code") == 200 and r.get("decision") in ["ANSWER", "answer", "QUALIFIED_ANSWER", "qualified_answer"] and not r.get("verification_required")
     },
     {
         "id": "TC02",

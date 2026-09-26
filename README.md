@@ -1,4 +1,4 @@
-# BIS Compliance Intelligence & Legal-Grade RAG Engine
+# BIS Compliance Intelligence Platform & Grounded RAG Engine
 
 [![Python Version](https://img.shields.io/badge/python-3.11%2B-blue.svg)](requirements.txt)
 [![Framework](https://img.shields.io/badge/framework-FastAPI%20%7C%20ChromaDB%20%7C%20SQLite-orange.svg)](app/main.py)
@@ -6,9 +6,9 @@
 [![Standards Authority](https://img.shields.io/badge/authority-Bureau%20of%20Indian%20Standards-navy.svg)](https://www.bis.gov.in)
 [![PRD Compliance](https://img.shields.io/badge/PRD%20R1--R8-Verified-brightgreen.svg)](#requirements-traceability-matrix-prd-r1r8)
 
-An evidence-grade, deterministic retrieval-augmented generation (RAG) and regulatory intelligence engine engineered specifically for the **Bureau of Indian Standards (BIS)** compliance ecosystem.
+An evidence-grounded, deterministic retrieval-augmented generation (RAG) and regulatory intelligence platform engineered specifically for the **Bureau of Indian Standards (BIS)** compliance ecosystem.
 
-The engine transforms raw Indian Standards (IS), Gazette notifications, Quality Control Orders (QCOs), accredited testing laboratory directories, and manufacturer specifications into an interconnected knowledge repository, delivering citation-anchored compliance intelligence, certification roadmap checklists, and scheme guidance without regulatory hallucinations.
+The platform transforms raw Indian Standards (IS), Gazette notifications, Quality Control Orders (QCOs), accredited testing laboratory directories, and manufacturer specifications into an interconnected knowledge repository, delivering citation-anchored compliance intelligence, certification roadmap checklists, and scheme guidance without regulatory hallucinations.
 
 ---
 
@@ -21,8 +21,8 @@ The engine transforms raw Indian Standards (IS), Gazette notifications, Quality 
 | **Disk Diagnostic** | `https://bis-system-v5-korea.yellowmeadow-d3173c9a.koreacentral.azurecontainerapps.io/status/disk` |
 | **Authentication** | `X-Internal-Service-Key: <CONFIGURED_IN_ENVIRONMENT>` (Required on `/query`, `/upload`, `/jobs`) |
 | **Azure Resource Group** | `Storyvord-Test` (Korea Central) |
-| **Container App** | `bis-system-v5-korea` |
-| **Container Registry** | `complywiseacr.azurecr.io/bis-system-v5` |
+| **Container App** | `bis-system-v5-korea` (Active Image: `complywiseacr.azurecr.io/bis-system-v5:v22`) |
+| **Corpus Release** | `corpus-release-0002` (Canonical truth in `docs/SYSTEM_TRUTH.json`) |
 
 ---
 
@@ -49,14 +49,14 @@ The engine transforms raw Indian Standards (IS), Gazette notifications, Quality 
 
 ## Requirements Traceability Matrix (PRD R1–R8)
 
-All 8 requirements defined in the Product Requirements Document (PRD) are audited below against live production evidence. Live index state confirmed via `GET /status`: **`chunks_indexed: 479`** across 19 ingested Indian Standards, backed by ChromaDB vector store (`bis_documents`), SQLite relational tables (`bis_knowledge.db`), and cross-encoder neural rerankers.
+All 8 requirements defined in the Product Requirements Document (PRD) are audited below against live production evidence. Live index state confirmed via `GET /status`: **`chunks_indexed: 479`** across 14 standard families (18 versions) and 25 catalog standards in `corpus-release-0002`, backed by ChromaDB vector store (`bis_documents`), SQLite relational tables (`bis_knowledge.db`), and cross-encoder neural rerankers.
 
 ### Summary Traceability Table
 
 | Requirement | PRD Capability Name | Status | Evidence (Commits & Live Verification) | Honest Operational Gaps |
 | :--- | :--- | :--- | :--- | :--- |
-| **R1** | **Answer questions on Indian Standards** | Built & Verified | Commits `d1b0ecd`, `6172535`, `b62cadc`, `7f021b0`, `dd2ab1a`; live `GET /status` (479 chunks); verified on IS 694, IS 1293, IS 9873 | 19 core standards indexed; unindexed standards (e.g. IS 13422) trigger honest abstention (`verification_required`) rather than hallucination. |
-| **R2** | **Recommend applicable standards from product description (with QCO status)** | Built & Verified | Commits `6172535`, `b963dca`; `app/product_mapping/`; matches descriptions to IS numbers and cross-references `qco_orders` | Commodity terms outside the indexed 19 standards/QCOs fall back to dense semantic search or manual standard specification. |
+| **R1** | **Answer questions on Indian Standards** | Built & Verified | Commits `d1b0ecd`, `6172535`, `b62cadc`, `7f021b0`, `dd2ab1a`, `b440ac0`; live `GET /status` (479 chunks); verified on IS 694, IS 1293, IS 9873 | 14 core standards (18 versions) indexed; unindexed standards (e.g. IS 13422) trigger honest abstention (`verification_required`) rather than hallucination. |
+| **R2** | **Recommend applicable standards from product description (with QCO status)** | Built & Verified | Commits `6172535`, `b963dca`; `app/product_mapping/`; matches descriptions to IS numbers and cross-references `qco_orders` | Commodity terms outside the indexed standards/QCOs fall back to dense semantic search or manual standard specification. |
 | **R3** | **Guide BIS certification schemes** | Built & Verified | Commit `77ba6f7`; `app/schemes/selector.py`; live verified for toys under IS 9873 (Scheme I / ISI) and consumer electronics (Scheme II / CRS) | Scheme X (FMCS) fee schedules and foreign customs tariffs provide statutory prerequisites rather than live currency calculators. |
 | **R4** | **Explain certification processes** | Built & Verified | Commit `f6c024b`; `app/certification/process.py`; live verified for domestic plugs (5-step checklist linked to NABL labs) | Conformity roadmap covers Scheme I and Scheme II; specialized tracks (e.g. Tatkal, Eco Mark) are not yet branched into isolated sub-trees. |
 | **R5** | **Answer consumer queries (plain-language mode)** | Built & Verified | Commits `b963dca`, `2abcbca`, `dd2ab1a`; live verified on IS 1293 with `audience="consumer"` (0 clause numbers, BIS Care pointer, 4-part layout) | Plain-language adaptation validated in English and Hindi; non-Hindi regional vernaculars (Tamil, Bengali, Marathi) are deferred. |
