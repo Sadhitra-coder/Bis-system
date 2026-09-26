@@ -175,7 +175,7 @@ def evaluate_standard_applicability(
             standard_title=candidate.standard_title,
             version_id=candidate.version_id,
             status=ApplicabilityStatus.APPLICABLE,
-            reason=f"Product '{product.product_name or product.category}' directly aligns with standard title and mandatory scope.",
+            reason=f"Product '{product.product_name or getattr(product, 'product_category', getattr(product, 'category', 'the product'))}' directly aligns with standard title and mandatory scope.",
             positive_inclusions=positive_inclusions or [candidate.standard_title or candidate.standard_number],
             explicit_exclusions=explicit_exclusions,
             required_clauses=[],

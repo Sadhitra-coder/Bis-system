@@ -22,6 +22,9 @@ from app.config import DATA_DIR, RAW_DATA_DIR, VECTOR_DB_DIR, settings
 from app.models import QueryRequest, QueryResponse
 from app.release.manifest import get_latest_release, list_releases, load_release_manifest
 
+import asyncio
+from collections import defaultdict
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/playground", tags=["playground"])
@@ -29,10 +32,19 @@ router = APIRouter(prefix="/playground", tags=["playground"])
 STATIC_DIR = Path(__file__).parent / "static"
 DEFAULT_DB_PATH = DATA_DIR / "knowledge" / "bis_knowledge.db"
 
+# Abuse protection: max 15 queries per minute per client IP
+_RATE_LIMIT_WINDOW = 60.0
+_RATE_LIMIT_MAX_REQUESTS = 15
+_ip_request_timestamps: Dict[str, List[float]] = defaultdict(list)
+_rate_limit_lock = asyncio.Lock()
+
+# Concurrency protection: max 3 concurrent playground queries
+_playground_semaphore = asyncio.Semaphore(3)
+
 
 class PlaygroundQueryRequest(BaseModel):
-    query: str = Field(..., min_length=2, description="Compliance question")
-    top_k: Optional[int] = Field(default=5, ge=1, le=20)
+    query: str = Field(..., min_length=2, max_length=1000, description="Compliance question")
+    top_k: Optional[int] = Field(default=5, ge=1, le=10, description="Candidate results ceiling")
 
 
 @router.get("", response_class=HTMLResponse)
@@ -231,38 +243,72 @@ async def execute_playground_query(payload: PlaygroundQueryRequest, request: Req
         except Exception:
             pass
 
-    top_k = payload.top_k or 5
-    try:
-        result = rag_pipeline.query(
-            payload.query,
-            retrieval_top_k=max(top_k, settings.RETRIEVAL_TOP_K),
-            rerank_top_k=top_k,
-        )
+    # 1. Per-IP Sliding Window Rate Limiting
+    client_ip = request.client.host if request.client else "127.0.0.1"
+    now = time.time()
+    async with _rate_limit_lock:
+        valid_ts = [t for t in _ip_request_timestamps[client_ip] if now - t < _RATE_LIMIT_WINDOW]
+        if len(valid_ts) >= _RATE_LIMIT_MAX_REQUESTS:
+            raise HTTPException(
+                status_code=429,
+                detail="Playground query rate limit exceeded (maximum 15 queries per minute). Please try again shortly."
+            )
+        valid_ts.append(now)
+        _ip_request_timestamps[client_ip] = valid_ts
 
-        return {
-            "query_id": result.get("query_id"),
-            "query": payload.query,
-            "answer": result.get("answer", ""),
-            "decision": result.get("decision", "answer"),
-            "confidence_score": result.get("confidence_score", 0.0),
-            "confidence_level": result.get("confidence_level", "medium"),
-            "grounding_status": result.get("grounding_status", "fully_grounded"),
-            "verification_required": result.get("verification_required", False),
-            "verification_reason": result.get("verification_reason"),
-            "evidence_summary": result.get("evidence_summary"),
-            "language": result.get("language", "en"),
-            "sources": result.get("sources", []),
-            "citations": result.get("citations", []),
-            "claims": result.get("claims", []),
-            "candidate_standards": result.get("candidate_standards", []),
-            "temporal_status": result.get("temporal_status", "current_supported"),
-            "model": result.get("model", "HybridRetriever+Reranker"),
-            "retrieved_chunks_count": (
-                len(result["retrieved_chunks"])
-                if isinstance(result.get("retrieved_chunks"), list)
-                else int(result.get("retrieved_chunks", 0) or 0)
-            ),
-        }
-    except Exception as exc:
-        logger.exception("Error executing playground query: %s", exc)
-        raise HTTPException(status_code=500, detail=str(exc))
+    top_k = payload.top_k or 5
+
+    # 2. Concurrency limiting and execution timeout
+    async with _playground_semaphore:
+        try:
+            loop = asyncio.get_running_loop()
+            result = await asyncio.wait_for(
+                loop.run_in_executor(
+                    None,
+                    lambda: rag_pipeline.query(
+                        payload.query,
+                        retrieval_top_k=max(top_k, settings.RETRIEVAL_TOP_K),
+                        rerank_top_k=top_k,
+                    )
+                ),
+                timeout=25.0
+            )
+
+            return {
+                "query_id": result.get("query_id"),
+                "query": payload.query,
+                "answer": result.get("answer", ""),
+                "decision": result.get("decision", "answer"),
+                "confidence_score": result.get("confidence_score", 0.0),
+                "confidence_level": result.get("confidence_level", "medium"),
+                "grounding_status": result.get("grounding_status", "fully_grounded"),
+                "verification_required": result.get("verification_required", False),
+                "verification_reason": result.get("verification_reason"),
+                "evidence_summary": result.get("evidence_summary"),
+                "language": result.get("language", "en"),
+                "sources": result.get("sources", []),
+                "citations": result.get("citations", []),
+                "claims": result.get("claims", []),
+                "candidate_standards": result.get("candidate_standards", []),
+                "temporal_status": result.get("temporal_status", "current_supported"),
+                "model": result.get("model", "HybridRetriever+Reranker"),
+                "retrieved_chunks_count": (
+                    len(result["retrieved_chunks"])
+                    if isinstance(result.get("retrieved_chunks"), list)
+                    else int(result.get("retrieved_chunks", 0) or 0)
+                ),
+            }
+        except asyncio.TimeoutError:
+            logger.warning("Playground query timed out after 25s for query: %s", payload.query[:80])
+            raise HTTPException(
+                status_code=504,
+                detail="Query execution timed out. Please try a more specific question."
+            )
+        except HTTPException:
+            raise
+        except Exception as exc:
+            logger.exception("Error executing playground query: %s", exc)
+            raise HTTPException(
+                status_code=500,
+                detail="An internal error occurred while processing the compliance query. Please retry."
+            )

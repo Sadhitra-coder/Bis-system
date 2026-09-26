@@ -531,6 +531,44 @@ class EvidenceEvaluator:
             verif_reason = None
             reasons.append("Moderate evidence confidence; answer should be qualified with known context boundaries.")
 
+        # -------------------------------------------------------------------
+        # STRICT DETERMINISTIC POLICY CONSISTENCY (Phase 6 / PRD)
+        # -------------------------------------------------------------------
+        # 1. If query_state indicates insufficiency or conflict, verification MUST be required
+        if query_state in (
+            QueryState.INSUFFICIENT_EVIDENCE,
+            QueryState.CONFLICTING_EVIDENCE,
+            QueryState.AMBIGUOUS_QUERY,
+            QueryState.VERIFICATION_REQUIRED,
+        ):
+            verif_required = True
+            decision = Decision.VERIFICATION_REQUIRED
+            if level == ConfidenceLevel.HIGH:
+                level = ConfidenceLevel.LOW
+            if not verif_reason:
+                verif_reason = reasons[0] if reasons else "Evidence is insufficient to answer the query safely."
+
+        # 2. If verification is required, decision CANNOT be ANSWER
+        if verif_required:
+            decision = Decision.VERIFICATION_REQUIRED
+            if query_state == QueryState.ANSWERABLE:
+                query_state = QueryState.INSUFFICIENT_EVIDENCE
+            if not verif_reason:
+                verif_reason = reasons[0] if reasons else "Regulatory verification is required."
+
+        # 3. If decision is VERIFICATION_REQUIRED, verif_required MUST be True
+        if decision == Decision.VERIFICATION_REQUIRED:
+            verif_required = True
+            if query_state == QueryState.ANSWERABLE:
+                query_state = QueryState.INSUFFICIENT_EVIDENCE
+
+        # 4. If level is LOW, verification MUST be required and decision CANNOT be ANSWER
+        if level == ConfidenceLevel.LOW:
+            verif_required = True
+            decision = Decision.VERIFICATION_REQUIRED
+            if query_state == QueryState.ANSWERABLE:
+                query_state = QueryState.INSUFFICIENT_EVIDENCE
+
         trace_dict = {
             "query": query,
             "normalized_query": norm_q,

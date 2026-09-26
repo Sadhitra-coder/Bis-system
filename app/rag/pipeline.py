@@ -25,7 +25,7 @@ from app.rag.retriever import HybridRetriever
 from app.rag.reranker import Reranker
 from app.rag.generator import AnswerGenerator
 from app.rag.source_format import build_sources
-from app.confidence import Decision, EvidenceEvaluator, EvidenceItem
+from app.confidence import Decision, EvidenceEvaluator, EvidenceItem, QueryState, ConfidenceLevel
 from app.knowledge.repository import KnowledgeRepository, default_repository
 from app.grounding import GroundingValidator, GroundingStatus, GroundingResult
 from app.rag.query import extract_query_entities, normalize_query
@@ -824,8 +824,8 @@ class RAGPipeline:
             temporal_content = " ".join(temporal_text_parts)
             temporal_ev = EvidenceItem(
                 chunk_id=f"temporal_{std_obj.standard_number.replace(' ', '_')}",
-                document_id=std_obj.document_id,
-                source_file=f"{std_obj.standard_number}_Registry.pdf",
+                document_id=std_obj.document_id or f"registry_{std_obj.standard_id}",
+                source_file="bis_knowledge.db",
                 source_content=temporal_content,
                 content=temporal_content,
                 standard_id=std_obj.standard_id,
@@ -838,12 +838,15 @@ class RAGPipeline:
                 clause_title="Official BIS Registry Version and Amendment Record",
                 provenance_completeness=1.0,
                 authority="BIS",
-                document_type="indian_standard",
+                document_type="structured_registry",
                 retrieval_methods=["registry_lookup", "dense", "bm25"],
                 reranker_score=10.0,
                 fusion_score=1.0,
                 knowledge_resolved=True,
                 metadata={
+                    "source_type": "structured_registry",
+                    "source_record": "standards",
+                    "record_id": std_obj.standard_id,
                     "is_current": (temporal_resolution.status == TemporalStatus.CURRENT_SUPPORTED),
                     "status": "effective" if temporal_resolution.status == TemporalStatus.CURRENT_SUPPORTED else "unknown",
                     "authority": "BIS",
@@ -874,6 +877,7 @@ class RAGPipeline:
             query_context.intent.intent in (
                 QueryIntentType.STANDARD_DISCOVERY,
                 QueryIntentType.APPLICABILITY_QUERY,
+                QueryIntentType.SCHEME_GUIDANCE,
             )
             or query_context.business_context.has_explicit_product
         )
@@ -1051,19 +1055,28 @@ class RAGPipeline:
         certification_checklist_dict: Optional[Dict[str, Any]] = None
 
         if query_context.intent.intent == QueryIntentType.SCHEME_GUIDANCE:
-            target_std = entities.standard_number or (evidence_items[0].standard_number if evidence_items else None)
+            # Only use standard if explicitly specified in query;
+            # DO NOT invent standard from candidate_standards or evidence chunks.
+            target_std = entities.standard_number
+
+            eff_origin = manufacturer_origin
+            if eff_origin == "domestic":
+                q_lower = query.lower()
+                if any(w in q_lower for w in ["overseas", "foreign", "abroad", "export to india", "exporting to india", "import into india", "importing to india", "outside india"]):
+                    eff_origin = "foreign"
+
             scheme_rec = select_certification_scheme(
                 standard_number=target_std,
                 product_description=query,
-                manufacturer_origin=manufacturer_origin,
+                manufacturer_origin=eff_origin,
                 knowledge_repo=self.knowledge_repo,
             )
             scheme_recommendation_dict = scheme_rec.to_dict()
             answer = scheme_rec.to_formatted_answer()
 
             # Authoritative regulatory evidence item derived from database facts
-            raw_desc = scheme_rec.raw_scheme_info.get("description") or scheme_rec.explanation
-            raw_basis = scheme_rec.raw_scheme_info.get("statutory_basis") or "Bureau of Indian Standards Act, 2016"
+            raw_desc = f"{scheme_rec.explanation}\n{scheme_rec.raw_scheme_info.get('description', '')}".strip()
+            raw_basis = scheme_rec.raw_scheme_info.get("statutory_basis") or "Bureau of Indian Standards Act, 2016 (Section 13, 14, 16) and BIS (Conformity Assessment) Regulations, 2018"
             scheme_source_content = (
                 f"Statutory Scheme: {scheme_rec.scheme_name} ({scheme_rec.scheme_code})\n"
                 f"Statutory Basis: {raw_basis}\n"
@@ -1073,8 +1086,8 @@ class RAGPipeline:
             )
             scheme_ev = EvidenceItem(
                 chunk_id=f"scheme_{scheme_rec.scheme_code}",
-                document_id="BIS_CONFORMITY_ASSESSMENT_REGULATIONS_2018",
-                source_file="BIS_Conformity_Assessment_Regulations_2018.pdf",
+                document_id="REGISTRY_CERTIFICATION_SCHEMES",
+                source_file="bis_knowledge.db",
                 source_content=scheme_source_content,
                 content=scheme_source_content,
                 standard_id=target_std or scheme_rec.scheme_code,
@@ -1084,12 +1097,15 @@ class RAGPipeline:
                 clause_title=f"BIS Certification Scheme: {scheme_rec.scheme_name}",
                 provenance_completeness=1.0,
                 authority="BIS",
-                document_type="certification_scheme",
+                document_type="structured_registry",
                 retrieval_methods=["registry_lookup", "rule_based"],
                 reranker_score=10.0,
                 fusion_score=1.0,
                 knowledge_resolved=True,
                 metadata={
+                    "source_type": "structured_registry",
+                    "source_record": "certification_schemes",
+                    "record_id": scheme_rec.scheme_code,
                     "scheme_code": scheme_rec.scheme_code,
                     "scheme_name": scheme_rec.scheme_name,
                     "is_mandatory": scheme_rec.is_mandatory,
@@ -1111,8 +1127,19 @@ class RAGPipeline:
                 evidence_items=evidence_items,
                 raw_claims=raw_claims,
             )
-            confidence.decision = Decision.ANSWER
-            confidence.verification_required = False
+            if scheme_rec.scheme_code in ("SCHEME-CLARIFICATION-REQUIRED", "SCHEME-I-VOLUNTARY") or not scheme_rec.is_mandatory:
+                confidence.decision = Decision.VERIFICATION_REQUIRED
+                confidence.verification_required = True
+                confidence.query_state = QueryState.INSUFFICIENT_EVIDENCE
+                confidence.level = ConfidenceLevel.LOW
+                if not confidence.verification_reason:
+                    confidence.verification_reason = "Product specification or statutory gazette verification required."
+            else:
+                confidence.decision = Decision.ANSWER
+                confidence.verification_required = False
+                confidence.query_state = QueryState.ANSWERABLE
+                confidence.level = ConfidenceLevel.HIGH
+                confidence.score = max(confidence.score, 0.85)
 
         elif query_context.intent.intent == QueryIntentType.PROCESS_EXPLANATION:
             target_std = entities.standard_number or (evidence_items[0].standard_number if evidence_items else None)
@@ -1138,8 +1165,8 @@ class RAGPipeline:
             )
             proc_ev = EvidenceItem(
                 chunk_id=f"process_{target_std or 'certification'}",
-                document_id="BIS_CONFORMITY_ASSESSMENT_JOURNEY",
-                source_file="BIS_Certification_Process_Checklist.pdf",
+                document_id="REGISTRY_CONFORMITY_ASSESSMENT",
+                source_file="bis_knowledge.db",
                 source_content=proc_source_content,
                 content=proc_source_content,
                 standard_id=target_std or "BIS_CERTIFICATION",
@@ -1149,12 +1176,15 @@ class RAGPipeline:
                 clause_title=f"BIS Certification Roadmap: {cert_checklist.scheme_name}",
                 provenance_completeness=1.0,
                 authority="BIS",
-                document_type="certification_process",
+                document_type="structured_registry",
                 retrieval_methods=["registry_lookup", "rule_based"],
                 reranker_score=10.0,
                 fusion_score=1.0,
                 knowledge_resolved=True,
                 metadata={
+                    "source_type": "structured_registry",
+                    "source_record": "certification_schemes",
+                    "record_id": cert_checklist.scheme_name,
                     "scheme_name": cert_checklist.scheme_name,
                     "is_current": True,
                     "status": "effective",
@@ -1175,6 +1205,9 @@ class RAGPipeline:
             )
             confidence.decision = Decision.ANSWER
             confidence.verification_required = False
+            confidence.query_state = QueryState.ANSWERABLE
+            confidence.level = ConfidenceLevel.HIGH
+            confidence.score = max(confidence.score, 0.85)
 
         elif self.generator is not None:
             generation_result = self.generator.generate(
@@ -1294,29 +1327,26 @@ class RAGPipeline:
         claims = [c.to_dict() for c in grounding.claims]
 
         # ====================================================
-        # FINAL ANSWER POLICY (Section 17 & 22)
+        # FINAL ANSWER POLICY (Phase 6 / PRD R3 / Phase 7)
         # ====================================================
 
         final_decision = confidence.decision.value
         final_verification_required = confidence.verification_required
         final_verification_reason = confidence.verification_reason
 
-        if not final_verification_required:
-            if grounding.status == GroundingStatus.UNSUPPORTED:
-                final_decision = Decision.VERIFICATION_REQUIRED.value
-                final_verification_required = True
-                final_verification_reason = (
-                    f"Grounding failure: {grounding.reason} "
-                    f"({grounding.unsupported_claims_summary or 'unsupported claims detected'})"
-                )
-            elif grounding.status == GroundingStatus.PARTIALLY_GROUNDED:
-                if final_decision == Decision.ANSWER.value:
-                    final_decision = Decision.QUALIFIED_ANSWER.value
-            elif grounding.status == GroundingStatus.UNVERIFIABLE:
-                if final_decision == Decision.ANSWER.value:
-                    final_decision = Decision.QUALIFIED_ANSWER.value
+        # 1. Grounding policy: If grounding is unsupported, decision MUST NOT be "answer"!
+        if grounding.status == GroundingStatus.UNSUPPORTED:
+            final_decision = Decision.VERIFICATION_REQUIRED.value
+            final_verification_required = True
+            final_verification_reason = (
+                f"Grounding failure: {grounding.reason} "
+                f"({grounding.unsupported_claims_summary or 'unsupported claims detected'})"
+            )
+        elif grounding.status in (GroundingStatus.PARTIALLY_GROUNDED, GroundingStatus.UNVERIFIABLE):
+            if final_decision == Decision.ANSWER.value:
+                final_decision = Decision.QUALIFIED_ANSWER.value
 
-        # Phase 9: Temporal policy enforcement (Section 13 & 18)
+        # 2. Temporal policy: If temporal status is unverified for a currentness-sensitive query -> verification_required MUST be True!
         is_currentness_query = (
             getattr(entities, "relative_temporal", None) == "current"
             or getattr(entities, "temporal_intent", None) == "current"
@@ -1328,9 +1358,24 @@ class RAGPipeline:
             if not final_verification_reason:
                 final_verification_reason = f"Temporal verification required: {temporal_resolution.reason}"
 
-        # Phase 11: Candidate mapping policy enforcement (PRD R2)
-        # Unconditional VERIFICATION_REQUIRED override removed in accordance with PRD R2.
-        # Applicability queries now pass through standard EvidenceEvaluator scoring.
+        # 3. Evidence sufficiency policy: If evidence is insufficient -> verification_required MUST be True!
+        if confidence.query_state == QueryState.INSUFFICIENT_EVIDENCE or confidence.level == ConfidenceLevel.LOW:
+            is_verified_scheme = (
+                scheme_recommendation_dict is not None
+                and scheme_recommendation_dict.get("is_mandatory") is True
+                and scheme_recommendation_dict.get("scheme_code") not in ("SCHEME-CLARIFICATION-REQUIRED", "SCHEME-I-VOLUNTARY")
+            )
+            is_verified_checklist = (
+                certification_checklist_dict is not None
+                and bool(certification_checklist_dict.get("steps"))
+            )
+            if not (is_verified_scheme or is_verified_checklist):
+                final_decision = Decision.VERIFICATION_REQUIRED.value
+                final_verification_required = True
+                if not final_verification_reason:
+                    final_verification_reason = confidence.verification_reason or "Evidence is insufficient to answer the query safely."
+
+        # 4. Product / Standard candidate mapping enforcement (Phase 11)
         if (
             (query_context.intent.intent == QueryIntentType.APPLICABILITY_QUERY or query_context.intent.intent == QueryIntentType.STANDARD_DISCOVERY)
             and not candidate_standards_list
@@ -1341,6 +1386,35 @@ class RAGPipeline:
                 final_verification_reason = (
                     "No candidate standards found in the ingested corpus matching the specified product."
                 )
+
+        # 5. STRICT BIDIRECTIONAL CONSISTENCY ENFORCEMENT:
+        # A) If verification is required, decision CANNOT be "answer"
+        if final_verification_required:
+            if final_decision == Decision.ANSWER.value:
+                final_decision = Decision.VERIFICATION_REQUIRED.value
+            if confidence.query_state == QueryState.ANSWERABLE:
+                confidence.query_state = QueryState.INSUFFICIENT_EVIDENCE
+            if not final_verification_reason:
+                final_verification_reason = confidence.verification_reason or "Regulatory verification is required."
+
+        # B) If decision is verification_required, verification_required MUST be True
+        if final_decision == Decision.VERIFICATION_REQUIRED.value:
+            final_verification_required = True
+            if confidence.query_state == QueryState.ANSWERABLE:
+                confidence.query_state = QueryState.INSUFFICIENT_EVIDENCE
+
+        # C) If query_state is INSUFFICIENT_EVIDENCE, verification_required MUST be True and decision CANNOT be "answer"
+        if confidence.query_state in (
+            QueryState.INSUFFICIENT_EVIDENCE,
+            QueryState.CONFLICTING_EVIDENCE,
+            QueryState.AMBIGUOUS_QUERY,
+            QueryState.VERIFICATION_REQUIRED,
+        ):
+            final_verification_required = True
+            if final_decision == Decision.ANSWER.value:
+                final_decision = Decision.VERIFICATION_REQUIRED.value
+            if not final_verification_reason:
+                final_verification_reason = confidence.verification_reason or "Evidence is insufficient to answer the query safely."
 
         # ====================================================
         # STEP 4: LABORATORY SUGGESTIONS & HINDI TRANSLATION

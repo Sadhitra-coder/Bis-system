@@ -1,0 +1,113 @@
+{
+  "system_name": "BIS Intelligence Platform",
+  "problem_statement": "SIH26107 - AI-powered Intelligent Assistant for Indian Standards and BIS Services for Industries and Consumers",
+  "truth_timestamp_utc": "2026-09-26T13:06:00Z",
+  "truth_invariants": [
+    "EVIDENCE > PLAUSIBILITY",
+    "CORRECTNESS > COVERAGE",
+    "EXPLICIT UNCERTAINTY > HALLUCINATION",
+    "AUTHORITATIVE SOURCES > LLM MEMORY",
+    "DETERMINISTIC FACTS > VAGUE GENERATION",
+    "TRACEABILITY > BLACK-BOX ANSWERS"
+  ],
+  "git_repository": {
+    "remote_origin": "https://github.com/Sadhitra-coder/Bis-system.git",
+    "branch": "main",
+    "baseline_head_sha": "2e2187b90879f9e346f28194c6b87286b34a20a3"
+  },
+  "knowledge_base": {
+    "sqlite_path": "data/knowledge/bis_knowledge.db",
+    "sqlite_bytes": 643072,
+    "sqlite_sha256": "17f18dae24acd4eee7b88314596f5cd6b72074f7be665ef5319387f5d4a9fe68",
+    "indexed_standards_count": 14,
+    "standard_versions_count": 18,
+    "metadata_catalog_standards_count": 25,
+    "table_counts": {
+      "standards": 14,
+      "standard_versions": 18,
+      "standard_parts": 3,
+      "clauses": 237,
+      "amendments": 16,
+      "temporal_relationships": 5,
+      "qcos": 23,
+      "products": 27,
+      "certification_schemes": 8,
+      "laboratories": 5,
+      "knowledge_relationships": 92,
+      "discovered_documents": 188,
+      "standards_metadata_catalog": 25,
+      "source_registry": 29,
+      "document_rights_ledger": 8,
+      "test_methods": 6,
+      "product_manuals": 9,
+      "authorities": 5,
+      "jurisdictions": 4
+    }
+  },
+  "vector_store": {
+    "backend": "ChromaDB",
+    "storage_path": "data/vector_db/chroma.sqlite3",
+    "storage_bytes": 17440768,
+    "storage_sha256": "69c343840fff269c9ecb4fc1e184ad164ca01cba62404d1bcfda1a4dd1cfea2e",
+    "collection_name": "bis_documents",
+    "total_chunks": 479,
+    "standard_coverage_distribution": {
+      "IS 1417": 96,
+      "UNSPECIFIED (Gazette / Regulatory Orders)": 95,
+      "IS 9873": 88,
+      "IS 16444-2": 41,
+      "IS 1293": 32,
+      "IS 1786": 25,
+      "IS 12933-1": 25,
+      "IS 694": 24,
+      "IS 9283": 22,
+      "IS 13422": 14,
+      "IS 3055-1": 10,
+      "IS 16444": 7
+    },
+    "chunk_type_distribution": {
+      "amendment": 215,
+      "indian_standard": 169,
+      "UNSPECIFIED": 95
+    }
+  },
+  "api_contract": {
+    "openapi_path": "docs/openapi.json",
+    "openapi_sha256": "7a9f4a54878f20b5aac52a586b7049320f07033a524d68358e694bac520d7c61",
+    "total_paths": 14,
+    "endpoints": [
+      "/health",
+      "/ready",
+      "/status",
+      "/api/v1/query",
+      "/api/v1/query/multilingual",
+      "/api/v1/standards/applicability",
+      "/api/v1/standards/recommend",
+      "/api/v1/certification/scheme",
+      "/api/v1/certification/process",
+      "/api/v1/hallmarking/guidance",
+      "/api/v1/laboratories/suggest",
+      "/playground/api/query",
+      "/jobs",
+      "/jobs/{job_id}"
+    ]
+  },
+  "azure_deployment": {
+    "subscription_id": "af1b6ec9-196d-45e1-98bc-1a899045beaf",
+    "resource_group": "Storyvord-Test",
+    "region": "koreacentral",
+    "container_app_name": "bis-system-v5-korea",
+    "container_registry": "complywiseacr.azurecr.io",
+    "deployed_fqdn": "bis-system-v5-korea.yellowmeadow-d3173c9a.koreacentral.azurecontainerapps.io"
+  },
+  "security_controls": {
+    "internal_service_key_protected_routes": [
+      "/jobs",
+      "/jobs/{job_id}"
+    ],
+    "playground_rate_limit_per_minute": 15,
+    "playground_concurrency_semaphore": 3,
+    "playground_timeout_seconds": 25.0,
+    "credential_rotation_status": "PENDING_DEPLOYMENT_ROTATION"
+  }
+}

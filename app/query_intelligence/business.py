@@ -25,6 +25,7 @@ from app.query_intelligence.models import BusinessContext
 _ACTIVITY_PATTERNS = [
     (re.compile(r'\b(?:we\s+manufacture|manufactures?|manufacturing(?:\s+of)?|we\s+make|makes?|we\s+produce|produces?|production(?:\s+of)?)\b', re.IGNORECASE), "manufacturing"),
     (re.compile(r'\b(?:we\s+import|imports?|importing(?:\s+of)?|we\s+source\s+from\s+abroad)\b', re.IGNORECASE), "importing"),
+    (re.compile(r'\b(?:we\s+export|exports?|exporting(?:\s+to\s+india|\s+of)?)\b', re.IGNORECASE), "exporting"),
     (re.compile(r'\b(?:we\s+distribute|distributes?|distribution(?:\s+of)?|we\s+trade|trades?)\b', re.IGNORECASE), "distribution"),
     (re.compile(r'\b(?:we\s+assemble|assembles?|assembly(?:\s+of)?)\b', re.IGNORECASE), "assembly"),
 ]
@@ -35,6 +36,8 @@ _BUSINESS_TYPE_PATTERNS = [
     (re.compile(r'\b(?:importer\s+of|as\s+an\s+importer|we\s+are\s+importers?)\b', re.IGNORECASE), "importer"),
     (re.compile(r'\b(?:distributor\s+of|as\s+a\s+distributor|trader\s+of|we\s+are\s+distributors?)\b', re.IGNORECASE), "distributor"),
     (re.compile(r'\b(?:assembler\s+of|as\s+an\s+assembler|we\s+are\s+assemblers?)\b', re.IGNORECASE), "assembler"),
+    (re.compile(r'\b(?:overseas\s+factory|foreign\s+factory|overseas\s+manufacturer|foreign\s+manufacturer)\b', re.IGNORECASE), "foreign manufacturer"),
+    (re.compile(r'\b(?:exporter\s+to\s+india|exporter\s+of)\b', re.IGNORECASE), "exporter"),
 ]
 
 # Explicit company size (STRICT: only when explicitly mentioned)
@@ -80,7 +83,7 @@ _PRODUCT_CATEGORY_PATTERNS = [
     re.compile(r'\b(?:gold\s+jewellery|gold\s+artefacts?|gold\s+articles?|hallmarked\s+gold)\b', re.IGNORECASE),
     re.compile(r'\b(?:pvc\s+pipes?|upvc\s+pipes?|cpvc\s+pipes?|polyethylene\s+pipes?)\b', re.IGNORECASE),
     re.compile(r'\b(?:pressure\s+cookers?|domestic\s+pressure\s+cookers?)\b', re.IGNORECASE),
-    re.compile(r'\b(?:electric\s+cables?|power\s+cables?|pvc\s+cables?)\b', re.IGNORECASE),
+    re.compile(r'\b(?:(?:electric|power|pvc|insulated)?\s*cables?|wires?|cords?)\b', re.IGNORECASE),
     re.compile(r'\b(?:safety\s+helmets?|protective\s+helmets?|industrial\s+helmets?)\b', re.IGNORECASE),
     re.compile(r'\b(?:lead\s+acid\s+batteries?|lithium\s+batteries?|storage\s+batteries?)\b', re.IGNORECASE),
     re.compile(r'\b(?:cement|portland\s+cement|pozzolana\s+cement)\b', re.IGNORECASE),
@@ -91,7 +94,7 @@ _PRODUCT_CATEGORY_PATTERNS = [
 
 # Contextual product capture: "our <product>", "for <product>", "applicable to <product>"
 _APPLICABILITY_PRODUCT_PATTERN = re.compile(
-    r'\b(?:applicable\s+to|applies\s+to|apply\s+to|for\s+our|for\s+the|covers?|manufacture\s+|producing\s+|importing\s+|regarding\s+our|about\s+our)\s+'
+    r'\b(?:applicable\s+to|applies\s+to|apply\s+to|for\s+our|for\s+the|covers?|manufacture\s+|producing\s+|importing\s+|exporting\s+|regarding\s+our|about\s+our)\s+'
     r'([a-zA-Z0-9\s-]+?)(?:\s+(?:in|at|with|under|according|dated|\?|\.|$))',
     re.IGNORECASE
 )
