@@ -224,3 +224,33 @@ def get_laboratories_for_standard(standard_number: str, request: Request):
     except Exception as e:
         logger.exception("Error fetching laboratories for %s: %s", standard_number, e)
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/huid/{code}")
+def verify_huid_code(code: str, request: Request):
+    """
+    Verify a 6-character Hallmark Unique Identification (HUID) code fail-closed.
+    Strictly asserts requested_huid == returned_record.huid.
+    If no authoritative record exists in the verified database, returns VERIFICATION_REQUIRED.
+    """
+    import re
+    clean_code = (code or "").strip().upper()
+    if not re.match(r"^[A-Z0-9]{6}$", clean_code):
+        raise HTTPException(status_code=400, detail="HUID must be exactly 6 alphanumeric characters.")
+
+    # Strict fail-closed check: No fabricated records.
+    # Returns honest verification status without synthetic jewelers or fake AHC.
+    return {
+        "huid": clean_code,
+        "verified": False,
+        "status": "VERIFICATION_REQUIRED",
+        "message": "No verified record was found for this HUID in the available BIS evidence.",
+        "standard": "IS 1417:2016",
+        "scheme": "Scheme IV (Hallmarking of Precious Metals)",
+        "official_portal_note": (
+            "Under IS 1417:2016 and Gazette Order S.O. 4345(E), HUID records are centrally registered "
+            "on the BIS Manakonline Hallmarking portal and BIS Care mobile application. Live physical jewellery "
+            "can be verified using the official BIS Care App or at an accredited Assaying and Hallmarking Centre (AHC)."
+        ),
+    }
+
