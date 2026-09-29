@@ -87,38 +87,29 @@ def _match_product_catalog_record(
 
     rows = c.execute("SELECT * FROM standards_metadata_catalog").fetchall()
 
-    # Domain keyword rules with exact standard mappings
-    keyword_boosts = [
-        (["cable", "cables", "wire", "wires", "cord", "cords", "flexible cord", "pvc cable"], "IS 694"),
-        (["smart meter", "smart meters", "static meter", "watt-hour meter", "electricity meter"], "IS 16444"),
-        (["toy", "toys", "plaything", "doll"], "IS 9873"),
-        (["plug", "plugs", "socket", "sockets", "socket-outlet", "adaptor"], "IS 1293"),
-        (["steel bar", "steel bars", "rebar", "rebars", "tmt bar", "tmt bars", "deformed steel"], "IS 1786"),
-        (["structural steel", "steel plate", "steel beam"], "IS 2062"),
-        (["thermometer", "clinical thermometer", "mercury thermometer"], "IS 3055"),
-        (["gold", "jewellery", "jewelry", "hallmark", "artefact", "silver"], "IS 1417"),
-        (["ppc cement", "portland pozzolana", "flyash cement"], "IS 1489"),
-        (["opc cement", "ordinary portland cement"], "IS 269"),
-        (["surgical glove", "rubber glove", "medical glove", "latex glove"], "IS 13422"),
-        (["hdpe pipe", "pe pipe", "polyethylene pipe"], "IS 4984"),
-        (["solar panel", "solar pv", "photovoltaic", "pv module"], "IS 14286"),
-        (["led driver", "led controlgear", "electronic controlgear"], "IS 15885"),
-        (["led lamp", "led bulb", "self-ballasted led"], "IS 16102"),
-        (["laptop", "tablet", "it equipment", "server", "power adapter"], "IS 13252"),
-        (["safety footwear", "safety shoe", "safety boot"], "IS 17043"),
-        (["sports footwear", "athletic footwear", "sports shoe"], "IS 15844"),
-        (["packaged drinking water", "bottled water", "water jar"], "IS 14543"),
-    ]
+    # Generic database-driven matching: check applicable_products JSON, products table, title, and category
+    # Strictly NO hardcoded product if/else or keyword-to-standard lists (Requirements 1, 2)
+    db_products = []
+    try:
+        db_products = c.execute("SELECT product_id, product_name, category FROM products").fetchall()
+    except Exception:
+        pass
 
-    for synonyms, preferred_std in keyword_boosts:
-        if any(re.search(r"\b" + re.escape(syn) + r"\b", desc) for syn in synonyms):
-            for r in rows:
-                if preferred_std in r["standard_number"]:
-                    return dict(r)
+    # Find matching products from database
+    matched_db_prods = set()
+    for p in db_products:
+        p_name = str(p["product_name"] or "").lower()
+        if p_name and p_name in desc:
+            matched_db_prods.add(p_name)
+        elif p_name:
+            p_tokens = [w for w in p_name.split() if len(w) > 3]
+            if len(p_tokens) >= 2 and all(tok in desc for tok in p_tokens[:2]):
+                matched_db_prods.add(p_name)
 
-    # General fallback: check applicable_products JSON, title, category
     best_record = None
     best_score = 0
+    desc_words = [w for w in re.findall(r"\b[a-zA-Z]{3,}\b", desc) if w not in ("what", "does", "standard", "apply", "product", "need", "test", "order")]
+
     for r in rows:
         row_dict = dict(r)
         score = 0
@@ -129,22 +120,28 @@ def _match_product_catalog_record(
             except Exception:
                 pass
 
+        # 1. Match against official applicable_products catalog field
         for p in prods:
             p_clean = p.lower()
             if p_clean in desc:
-                score += 4
+                score += 10
+            elif any(matched_p in p_clean for matched_p in matched_db_prods):
+                score += 8
             elif any(w in desc for w in p_clean.split() if len(w) > 3):
-                score += 2
+                overlap = sum(1 for w in p_clean.split() if len(w) > 3 and w in desc)
+                score += overlap * 3
 
+        # 2. Match against standard title
         title_lower = (row_dict.get("title") or "").lower()
-        for w in title_lower.split():
-            if len(w) > 4 and w in desc:
-                score += 1
+        title_tokens = [w for w in re.findall(r"\b[a-zA-Z]{4,}\b", title_lower) if w not in ("specification", "requirements", "method", "safety", "general", "part", "section")]
+        title_overlap = sum(1 for w in title_tokens if w in desc_words)
+        score += title_overlap * 2
 
+        # 3. Match against standard category
         cat_lower = (row_dict.get("category") or "").lower()
-        for w in cat_lower.split():
-            if len(w) > 4 and w in desc:
-                score += 1
+        cat_tokens = [w for w in re.findall(r"\b[a-zA-Z]{4,}\b", cat_lower)]
+        cat_overlap = sum(1 for w in cat_tokens if w in desc_words)
+        score += cat_overlap * 1
 
         if score > best_score:
             best_score = score
@@ -235,15 +232,19 @@ def select_certification_scheme(
                     std_clean = matched_by_prod["standard_number"].split(":")[0]
                     num_m = re.search(r"\d+", std_clean)
                     std_num_only = num_m.group(0) if num_m else ""
-                elif "16444" in std_clean and not any(k in product_description.lower() for k in ["meter", "watt-hour", "static meter"]):
-                    logger.info(
-                        "Standard %s conflicts with product description '%s'. Re-aligning to %s.",
-                        std_clean, product_description, matched_by_prod["standard_number"]
-                    )
-                    catalog_record = matched_by_prod
-                    std_clean = matched_by_prod["standard_number"].split(":")[0]
-                    num_m = re.search(r"\d+", std_clean)
-                    std_num_only = num_m.group(0) if num_m else ""
+                elif matched_by_prod and std_clean:
+                    cand_num = matched_by_prod["standard_number"].split(":")[0]
+                    cand_title = (matched_by_prod.get("title") or "").lower()
+                    # If standard_number does not match product-matched standard and has zero lexical overlap with product description
+                    if cand_num != std_clean and not any(w in product_description.lower() for w in std_clean.lower().split()):
+                        logger.info(
+                            "Standard %s conflicts with product description '%s'. Re-aligning to %s.",
+                            std_clean, product_description, matched_by_prod["standard_number"]
+                        )
+                        catalog_record = matched_by_prod
+                        std_clean = cand_num
+                        num_m = re.search(r"\d+", std_clean)
+                        std_num_only = num_m.group(0) if num_m else ""
 
         # Lookup in standards_metadata_catalog by standard number if not resolved by product
         if not catalog_record and (std_clean or std_num_only):

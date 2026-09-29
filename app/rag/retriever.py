@@ -346,22 +346,21 @@ class HybridRetriever:
             self.chroma_client = None
         else:
             if not self.persist_directory.exists():
-                raise FileNotFoundError(
-                    f"Vector database directory not found: {self.persist_directory}"
-                )
+                self.persist_directory.mkdir(parents=True, exist_ok=True)
             logger.info("Connecting to ChromaDB at %s", self.persist_directory)
             self.chroma_client = chromadb.PersistentClient(path=str(self.persist_directory))
             existing = [item.name for item in self.chroma_client.list_collections()]
             if self.collection_name not in existing:
-                raise RuntimeError(
-                    f"Collection '{self.collection_name}' not found. "
-                    f"Available: {existing}. Ingest a document first."
+                logger.warning(
+                    "Collection '%s' not found. Creating empty collection.", self.collection_name
                 )
-            self.collection = self.chroma_client.get_collection(name=self.collection_name)
+                self.collection = self.chroma_client.get_or_create_collection(name=self.collection_name)
+            else:
+                self.collection = self.chroma_client.get_collection(name=self.collection_name)
 
-        collection_count = self.collection.count()
+        collection_count = self.collection.count() if hasattr(self.collection, "count") else 0
         if collection_count == 0:
-            raise RuntimeError("ChromaDB collection is empty. Ingest at least one document first.")
+            logger.info("ChromaDB collection is empty. HybridRetriever initialized in empty state.")
 
         # Embedding model
         self.embedder = embedder or SentenceTransformer(embedding_model)
@@ -426,7 +425,10 @@ class HybridRetriever:
         logger.info("Building BM25 index from Chroma collection...")
         corpus = self._read_corpus_from_collection()
         if not corpus:
-            raise RuntimeError(f"No documents found in collection '{self.collection_name}'.")
+            logger.info(f"No documents found in collection '{self.collection_name}'. BM25 index is empty.")
+            self.bm25_chunks = []
+            self.bm25 = None
+            return
         self.bm25_chunks = corpus
         tokenized = [tokenize(c["content"]) for c in self.bm25_chunks]
         self.bm25 = BM25Okapi(tokenized)
@@ -454,6 +456,8 @@ class HybridRetriever:
         Returns list of dicts with chunk_id, content, metadata, dense_score, dense_rank.
         """
         if not query or not query.strip():
+            return []
+        if not hasattr(self.collection, "count") or self.collection.count() == 0:
             return []
 
         query_embedding = self.embedder.encode(query.strip(), normalize_embeddings=True)

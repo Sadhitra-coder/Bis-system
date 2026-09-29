@@ -26,24 +26,37 @@ from app.rag.query import QueryEntities
 class QueryIntentType(str, Enum):
     """
     Canonical, operational query intent categories.
-    Keeps the taxonomy small and functional without trivial proliferation.
+    Keeps the taxonomy functional and precise.
     """
-    STANDARD_LOOKUP = "STANDARD_LOOKUP"                     # e.g. "IS 3055"
+    # Canonical intents per system specification
+    STANDARD_LOOKUP = "STANDARD_LOOKUP"                     # e.g. "What standard applies to this product?" or "IS 3055"
+    QCO_APPLICABILITY = "QCO_APPLICABILITY"                 # e.g. "Does QCO X apply to my product?"
+    CERTIFICATION = "CERTIFICATION"                         # e.g. "certification workflow / scheme / authority"
+    TESTING_REQUIREMENT = "TESTING_REQUIREMENT"             # e.g. "testing requirements for product"
+    LABORATORY_SEARCH = "LABORATORY_SEARCH"                 # e.g. "Find a testing laboratory for my product"
+    PRODUCT_COMPLIANCE = "PRODUCT_COMPLIANCE"               # e.g. "product compliance requirements"
+    REQUIREMENT_EXPLANATION = "REQUIREMENT_EXPLANATION"     # e.g. "what does permissible error mean?"
+    SOURCE_LOOKUP = "SOURCE_LOOKUP"                         # e.g. "where is this gazette notification published?"
+    REGULATORY_UPDATE = "REGULATORY_UPDATE"                 # e.g. "recent updates to quality orders"
+    GENERAL_INFORMATION = "GENERAL_INFORMATION"             # e.g. "what is BIS?"
+    UNSUPPORTED = "UNSUPPORTED"                             # e.g. out-of-domain or invalid query
+    UNKNOWN = "UNKNOWN"                                     # e.g. unrecognized or insufficient intent
+
+    # Retained for backward compatibility with existing tests and modules
     CLAUSE_LOOKUP = "CLAUSE_LOOKUP"                         # e.g. "IS 3055 clause 4.1"
     AMENDMENT_LOOKUP = "AMENDMENT_LOOKUP"                   # e.g. "IS 3055 amendment 1"
     VERSION_LOOKUP = "VERSION_LOOKUP"                       # e.g. "IS 3055 2024 edition"
     CURRENTNESS_QUERY = "CURRENTNESS_QUERY"                 # e.g. "current IS 3055 requirement"
-    REQUIREMENT_DISCOVERY = "REQUIREMENT_DISCOVERY"         # e.g. "testing requirements for thermometers"
-    STANDARD_DISCOVERY = "STANDARD_DISCOVERY"               # e.g. "which BIS standard covers clinical thermometers?"
-    APPLICABILITY_QUERY = "APPLICABILITY_QUERY"             # e.g. "is IS 3055 applicable to clinical thermometers?"
+    REQUIREMENT_DISCOVERY = "TESTING_REQUIREMENT"         # alias for REQUIREMENT_DISCOVERY / TESTING_REQUIREMENT
+    STANDARD_DISCOVERY = "STANDARD_DISCOVERY"               # alias for STANDARD_LOOKUP
+    APPLICABILITY_QUERY = "APPLICABILITY_QUERY"             # alias for QCO_APPLICABILITY / PRODUCT_COMPLIANCE
     DOCUMENT_REQUIREMENT_QUERY = "DOCUMENT_REQUIREMENT_QUERY" # e.g. "what documents are required for certification?"
     REFERENCE_LOOKUP = "REFERENCE_LOOKUP"                   # e.g. "normative references in IS 3055"
-    EXPLANATION_QUERY = "EXPLANATION_QUERY"                 # e.g. "what does permissible error mean?"
+    EXPLANATION_QUERY = "EXPLANATION_QUERY"                 # alias for REQUIREMENT_EXPLANATION
     COMPARISON_QUERY = "COMPARISON_QUERY"                   # e.g. "difference between 2020 and 2024 editions"
-    GENERAL_INFORMATION = "GENERAL_INFORMATION"             # e.g. "what is BIS?"
-    SCHEME_GUIDANCE = "SCHEME_GUIDANCE"                     # e.g. "which certification scheme applies for toys / IS 9873"
-    PROCESS_EXPLANATION = "PROCESS_EXPLANATION"             # e.g. "how do I get certification for toys under IS 9873"
-    AMBIGUOUS_QUERY = "AMBIGUOUS_QUERY"                     # e.g. "lity", "thermometers", vague queries
+    SCHEME_GUIDANCE = "SCHEME_GUIDANCE"                     # alias for CERTIFICATION
+    PROCESS_EXPLANATION = "PROCESS_EXPLANATION"             # alias for CERTIFICATION
+    AMBIGUOUS_QUERY = "AMBIGUOUS_QUERY"                     # alias for UNKNOWN / AMBIGUOUS
 
 
 # ============================================================
@@ -106,6 +119,60 @@ class IntentClassification:
             "candidate_intents": self.candidate_intents,
             "is_ambiguous": self.is_ambiguous,
             "classifier_type": self.classifier_type,
+            "reasoning": self.reasoning,
+        }
+
+
+@dataclass
+class StructuredQueryIntent:
+    """
+    Structured outcome of query intent classification and entity extraction (Requirement 2).
+    Captures:
+      - intent (STANDARD_LOOKUP, QCO_APPLICABILITY, CERTIFICATION, TESTING_REQUIREMENT,
+        LABORATORY_SEARCH, PRODUCT_COMPLIANCE, REQUIREMENT_EXPLANATION, SOURCE_LOOKUP,
+        REGULATORY_UPDATE, GENERAL_INFORMATION, UNSUPPORTED, UNKNOWN)
+      - product identity (product, product_category)
+      - intended use and technical characteristics
+      - standard and QCO identifiers
+      - jurisdiction and requested entity/service
+      - constraints and diagnostic signals
+    """
+    intent: QueryIntentType
+    intent_confidence: float = 1.0
+    product: Optional[str] = None
+    product_category: Optional[str] = None
+    intended_use: Optional[str] = None
+    technical_characteristics: Dict[str, Any] = field(default_factory=dict)
+    standard_identifiers: List[str] = field(default_factory=list)
+    qco_identifiers: List[str] = field(default_factory=list)
+    jurisdiction: Optional[str] = None
+    requested_entity_or_service: Optional[str] = None
+    constraints: Dict[str, Any] = field(default_factory=dict)
+    signals: List[str] = field(default_factory=list)
+    candidate_intents: List[Dict[str, Any]] = field(default_factory=list)
+    is_ambiguous: bool = False
+    classifier_type: str = "deterministic"
+    raw_query: str = ""
+    reasoning: Optional[str] = None
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "intent": self.intent.value if isinstance(self.intent, QueryIntentType) else str(self.intent),
+            "intent_confidence": round(float(self.intent_confidence), 4),
+            "product": self.product,
+            "product_category": self.product_category,
+            "intended_use": self.intended_use,
+            "technical_characteristics": self.technical_characteristics,
+            "standard_identifiers": self.standard_identifiers,
+            "qco_identifiers": self.qco_identifiers,
+            "jurisdiction": self.jurisdiction,
+            "requested_entity_or_service": self.requested_entity_or_service,
+            "constraints": self.constraints,
+            "signals": self.signals,
+            "candidate_intents": self.candidate_intents,
+            "is_ambiguous": self.is_ambiguous,
+            "classifier_type": self.classifier_type,
+            "raw_query": self.raw_query,
             "reasoning": self.reasoning,
         }
 
@@ -241,6 +308,7 @@ class QueryContext:
     query_state: QueryLifecycleState = QueryLifecycleState.NORMAL
     retrieval_strategy: RetrievalStrategy = RetrievalStrategy.SEMANTIC_CONTEXTUAL
     retrieval_query_variants: List[str] = field(default_factory=list)
+    structured_intent: Optional[StructuredQueryIntent] = None
     trace: Dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> Dict[str, Any]:
@@ -248,6 +316,7 @@ class QueryContext:
             "original_query": self.original_query,
             "normalized_query": self.normalized_query,
             "intent": self.intent.to_dict(),
+            "structured_intent": self.structured_intent.to_dict() if self.structured_intent else None,
             "entities": self.entities.to_dict(),
             "business_context": self.business_context.to_dict(),
             "profile_context": self.profile_context.to_dict() if self.profile_context else None,

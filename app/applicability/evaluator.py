@@ -162,12 +162,38 @@ def evaluate_standard_applicability(
         for m in pat.finditer(corpus_text):
             positive_inclusions.append(m.group(1).strip())
 
-    # Direct match on title or keywords
+    # 4. Positive Inclusion Checking (LHS == RHS Proof)
+    for pat in _INCLUSION_PATTERNS:
+        for m in pat.finditer(corpus_text):
+            positive_inclusions.append(m.group(1).strip())
+
     title_lower = (candidate.standard_title or "").lower()
     cand_score = float(getattr(candidate, "mapping_score", getattr(candidate, "match_score", 0.5)))
-    direct_title_match = any(token in title_lower for token in [prod_name, prod_cat] if token and len(token) > 3)
 
-    if direct_title_match or cand_score >= 0.75:
+    # Extract meaningful product tokens (excluding generic modifiers)
+    stop_words = {"domestic", "commercial", "portable", "general", "type", "with", "from", "part", "section", "specification", "requirements"}
+    prod_name_tokens = [w for w in re.findall(r"\b[a-zA-Z]{3,}\b", prod_name) if w not in stop_words]
+    prod_cat_tokens = [w for w in re.findall(r"\b[a-zA-Z]{3,}\b", prod_cat) if w not in stop_words]
+
+    # Verify if candidate title or scope text explicitly covers the product entity
+    has_noun_match = False
+    for tok in prod_name_tokens:
+        tok_stem = tok.rstrip("s")
+        if tok_stem in title_lower or any(tok_stem in inc.lower() for inc in positive_inclusions):
+            has_noun_match = True
+            break
+
+    # Scope condition verification (e.g. use_environment, voltage, etc.)
+    scope_conditions_compatible = True
+    if prod_env:
+        if "commercial" in prod_env and "household" in title_lower and "commercial" not in corpus_text:
+            scope_conditions_compatible = False
+        elif "industrial" in prod_env and "domestic" in title_lower and "industrial" not in corpus_text:
+            scope_conditions_compatible = False
+
+    # Legal proof: MUST have affirmative scope match, compatible conditions, and adequate mapping score
+    # Similarity alone NEVER produces APPLICABLE status without verified scope coverage (Requirement 1, 6, 7)
+    if has_noun_match and scope_conditions_compatible and cand_score >= 0.70:
         return ApplicabilityAssessment(
             assessment_id=ass_id,
             standard_id=candidate.standard_id,
@@ -185,8 +211,8 @@ def evaluate_standard_applicability(
         )
 
     # 5. Partial / Broad Family Match
-    prod_tokens = [w for w in (prod_name + " " + prod_cat).split() if len(w) > 3]
-    if cand_score >= 0.45 or any(k in corpus_text for k in prod_tokens):
+    prod_tokens = prod_name_tokens + prod_cat_tokens
+    if cand_score >= 0.45 or any(k in corpus_text for k in prod_tokens if len(k) > 3):
         return ApplicabilityAssessment(
             assessment_id=ass_id,
             standard_id=candidate.standard_id,
@@ -212,15 +238,91 @@ def evaluate_standard_applicability(
         standard_title=candidate.standard_title,
         version_id=candidate.version_id,
         status=ApplicabilityStatus.INSUFFICIENT_EVIDENCE,
-        reason=f"Low similarity match ({cand_score:.2f}) between product and standard '{candidate.standard_number}'.",
+        reason="Applicability could not be verified from available official evidence.",
         positive_inclusions=[],
         explicit_exclusions=explicit_exclusions,
         required_clauses=[],
         confidence_score=round(cand_score, 4),
         temporal_status=temporal_status,
         verification_required=True,
-        verification_reason="Evidence is insufficient to confirm positive scope applicability.",
+        verification_reason="Applicability could not be verified from available official evidence.",
     )
+
+
+def evaluate_qco_applicability(
+    product: Optional[ProductContext],
+    qco_record: Optional[Dict[str, Any]],
+    standard_cand: Optional[ProductStandardCandidate] = None,
+    official_evidence_text: Optional[str] = None,
+) -> Dict[str, Any]:
+    """
+    Evaluates whether a Quality Control Order (QCO) applies to a product (Requirements 7 & 9).
+    Strict proof sequence:
+        PRODUCT FACTS -> NORMALIZED PRODUCT -> OFFICIAL QCO SCOPE -> MATCH / NO MATCH / UNKNOWN -> EVIDENCE
+    If official source does not prove applicability, returns:
+        "Applicability could not be verified from available official evidence."
+    """
+    if not product or product.is_empty:
+        return {
+            "status": "UNKNOWN",
+            "relationship": "UNKNOWN",
+            "is_applicable": False,
+            "verification_required": True,
+            "reason": "Applicability could not be verified from available official evidence. Product details are unspecified.",
+        }
+
+    if not qco_record and not official_evidence_text:
+        return {
+            "status": "UNKNOWN",
+            "relationship": "UNKNOWN",
+            "is_applicable": False,
+            "verification_required": True,
+            "reason": "Applicability could not be verified from available official evidence. No authoritative QCO evidence found.",
+        }
+
+    # Evaluate LHS (normalized product) vs RHS (official regulatory scope)
+    prod_name = (product.product_name or "").lower().strip()
+    qco_title = str((qco_record or {}).get("title", "") or "").lower().strip()
+    qco_order_num = str((qco_record or {}).get("qco_number", "") or "").strip()
+    corpus_text = f"{qco_title} {official_evidence_text or ''}".lower()
+
+    # 1. Check explicit exclusions
+    for pat in _EXCLUSION_PATTERNS:
+        for m in pat.finditer(corpus_text):
+            excl_text = m.group(1).lower()
+            if prod_name and prod_name in excl_text:
+                return {
+                    "status": "NO_MATCH",
+                    "relationship": "NO_MATCH",
+                    "is_applicable": False,
+                    "verification_required": False,
+                    "reason": f"Product '{product.product_name}' is explicitly excluded by official QCO scope: '{m.group(1).strip()}'.",
+                    "qco_number": qco_order_num,
+                }
+
+    # 2. Check proven inclusion (LHS == RHS)
+    prod_tokens = [w for w in re.findall(r"\b[a-zA-Z]{3,}\b", prod_name) if w not in ("what", "does", "apply", "product", "need", "test", "order")]
+    matches_qco_scope = any(tok in corpus_text for tok in prod_tokens) if prod_tokens else False
+
+    if matches_qco_scope:
+        return {
+            "status": "MATCH",
+            "relationship": "MATCH",
+            "is_applicable": True,
+            "verification_required": False,
+            "reason": f"Official Quality Control Order '{qco_order_num or qco_title}' explicitly establishes applicability to '{product.product_name}'.",
+            "qco_number": qco_order_num,
+            "qco_title": qco_title,
+        }
+
+    return {
+        "status": "UNKNOWN",
+        "relationship": "UNKNOWN",
+        "is_applicable": False,
+        "verification_required": True,
+        "reason": "Applicability could not be verified from available official evidence.",
+        "qco_number": qco_order_num,
+    }
 
 
 def synthesize_compliance_readiness(

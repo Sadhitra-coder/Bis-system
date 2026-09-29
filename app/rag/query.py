@@ -249,6 +249,9 @@ class RetrievalTrace:
     rerank_latency_ms: float = 0.0
     contextualization_latency_ms: float = 0.0
     total_latency_ms: float = 0.0
+    # Requirement 14 trace fields
+    accepted_evidence: List[Dict[str, Any]] = field(default_factory=list)
+    rejected_evidence: List[Dict[str, Any]] = field(default_factory=list)
 
 
 

@@ -1,4 +1,5 @@
 import logging
+import re
 from collections.abc import Mapping
 from typing import Any, Dict, List, Optional
 
@@ -34,80 +35,159 @@ def _get_field(item: Any, key: str, default: Any = None) -> Any:
     return default
 
 
-def compute_intent_ranking_key(item: Any, entities: QueryEntities) -> tuple:
+def compute_intent_ranking_key(
+    item: Any,
+    entities: QueryEntities,
+    query_context: Optional[Any] = None,
+) -> tuple:
     """
     Computes a multi-tier sorting key and ranking reason implementing the
-    Phase 4.2 intent-aware final ranking contract:
-        1. Hard scope validity (scope_valid)
-        2. Exact identifier satisfaction (identifier_tier)
-        3. Version satisfaction (version_tier)
-        4. CrossEncoder relevance (reranker_score)
-        5. Fused RRF retrieval relevance (fusion_score)
+    multi-signal ranking policy (Requirements 1 & 11):
+        1. Product domain compatibility (product_match_tier)
+        2. Query intent compatibility (intent_match_tier)
+        3. Hard standard scope validity (scope_valid)
+        4. Exact identifier satisfaction (identifier_tier)
+        5. Version satisfaction (version_tier)
+        6. Source authority tier (authority_tier)
+        7. Currentness tier (currentness_tier)
+        8. CrossEncoder relevance (reranker_score)
+        9. Fused RRF retrieval relevance (fusion_score)
 
     Returns:
-        (scope_valid, identifier_tier, version_tier, reranker_score, fusion_score, reason)
+        (product_match_tier, intent_match_tier, scope_valid, identifier_tier,
+         version_tier, authority_tier, currentness_tier, reranker_score, fusion_score, reason)
     """
     cand_std = str(_get_field(item, "standard_number", "") or "").strip().upper()
     cand_clause = str(_get_field(item, "clause_id", "") or "").strip()
+    cand_clause_title = str(_get_field(item, "clause_title", "") or "").strip().lower()
     cand_amd = str(_get_field(item, "amendment_number", "") or "").strip()
     cand_year = _get_field(item, "standard_year")
     cand_ver = str(_get_field(item, "edition_or_version", "") or "").strip().lower()
+    cand_title = str(_get_field(item, "standard_title", "") or "").strip().lower()
+    cand_doc_type = str(_get_field(item, "document_type", "") or "").strip().lower()
+    cand_content = str(_get_field(item, "content", "") or "").lower()
+    cand_meta = _get_field(item, "metadata", {}) or {}
     reranker_score = float(_get_field(item, "reranker_score", float("-inf")))
     fusion_score = float(_get_field(item, "fusion_score", 0.0))
+    reason = ""
 
-    # 1. Hard scope validity
+    # 1. Product domain matching (Requirement 1 & 11)
+    target_product = ""
+    if query_context is not None:
+        if getattr(query_context, "structured_intent", None) and getattr(query_context.structured_intent, "product", None):
+            target_product = str(query_context.structured_intent.product).lower().strip()
+        elif getattr(query_context, "business_context", None) and getattr(query_context.business_context, "product_name", None):
+            target_product = str(query_context.business_context.product_name).lower().strip()
+
+    product_match_tier = 0
+    if target_product:
+        # Extract meaningful product tokens (len >= 3)
+        stop_words = {"what", "does", "standard", "apply", "product", "need", "test", "testing", "india", "indian", "order", "with", "from", "under"}
+        target_tokens = [w for w in re.findall(r"\b[a-zA-Z]{3,}\b", target_product) if w not in stop_words]
+        
+        cand_prods_str = str(cand_meta.get("applicable_products", "") or "").lower()
+        full_cand_text = f"{cand_title} {cand_prods_str} {cand_content[:300]}"
+
+        has_target_token = any(tok in full_cand_text for tok in target_tokens)
+        if has_target_token:
+            product_match_tier = 2
+            reason = "target_product_match"
+        elif cand_title:
+            # Check if cand_title specifies an explicit different product domain
+            cand_title_tokens = [w for w in re.findall(r"\b[a-zA-Z]{4,}\b", cand_title) if w not in stop_words and w not in ("specification", "requirements", "method", "safety", "general", "part", "section")]
+            if cand_title_tokens and not any(tok in cand_title for tok in target_tokens):
+                # Strong conflict: candidate belongs to an unrelated product
+                product_match_tier = -3
+                reason = "conflicting_product_domain"
+            else:
+                product_match_tier = 0
+                reason = "neutral_product"
+        else:
+            product_match_tier = 0
+            reason = "neutral_product"
+    else:
+        product_match_tier = 0
+        reason = "unspecified_product"
+
+    # 2. Query intent compatibility (Requirement 3 & 13)
+    intent_val = None
+    if query_context is not None and getattr(query_context, "intent", None):
+        raw_intent = getattr(query_context.intent, "intent", None)
+        intent_val = getattr(raw_intent, "value", str(raw_intent)).upper()
+
+    intent_match_tier = 1
+    if intent_val == "LABORATORY_SEARCH":
+        if cand_doc_type == "laboratory" or "testing laboratory" in cand_content or "nabl" in cand_content:
+            intent_match_tier = 2
+            reason += ";lab_intent_match"
+        else:
+            intent_match_tier = -1
+    else:
+        # Non-laboratory intents must penalize standalone laboratory directory chunks
+        if cand_doc_type == "laboratory" or "directory of laboratories" in cand_content or "testing facilities recognized" in cand_content:
+            intent_match_tier = -3
+            reason += ";suppressed_laboratory_chunk"
+        elif intent_val in ("QCO_APPLICABILITY", "APPLICABILITY_QUERY"):
+            if "qco" in cand_doc_type or "order" in cand_doc_type or "order" in cand_title or "scope" in cand_clause_title:
+                intent_match_tier = 2
+                reason += ";qco_intent_match"
+        elif intent_val in ("TESTING_REQUIREMENT", "REQUIREMENT_DISCOVERY"):
+            if "test" in cand_clause_title or "requirement" in cand_clause_title or "sampling" in cand_clause_title:
+                intent_match_tier = 2
+                reason += ";testing_intent_match"
+
+    # 3. Hard scope validity
     if entities.standard_number:
         req_std = entities.standard_number.strip().upper()
         if cand_std:
             if cand_std == req_std:
                 scope_valid = 2
+                reason += ";exact_standard_match"
             else:
                 scope_valid = -1  # Conflicting standard
+                reason += ";conflicting_standard"
         else:
             scope_valid = 1  # Standard unknown / unannotated
     else:
         scope_valid = 1
 
-    # 2. Exact identifier satisfaction
+    # 4. Exact identifier satisfaction
     if entities.clause_id:
         req_clause = entities.clause_id.strip()
         if cand_clause and cand_clause == req_clause:
             identifier_tier = 3
-            reason = f"exact_clause_match:{req_clause}"
+            reason += f";exact_clause_match:{req_clause}"
         elif cand_clause and cand_clause.startswith(req_clause + "."):
             identifier_tier = 2
-            reason = f"subclause_match:{cand_clause}"
+            reason += f";subclause_match:{cand_clause}"
         elif not cand_clause:
             identifier_tier = 1
-            reason = "same_standard_header_null_clause"
+            reason += ";same_standard_header_null_clause"
         else:
             identifier_tier = 0
-            reason = f"different_clause:{cand_clause}"
+            reason += f";different_clause:{cand_clause}"
 
     elif entities.amendment_number:
         req_amd = entities.amendment_number.strip()
         if cand_amd and cand_amd == req_amd:
             identifier_tier = 3
-            reason = f"exact_amendment_match:{req_amd}"
+            reason += f";exact_amendment_match:{req_amd}"
         elif not cand_amd:
             identifier_tier = 1
-            reason = "base_standard_no_amendment"
+            reason += ";base_standard_no_amendment"
         else:
             identifier_tier = 0
-            reason = f"different_amendment:{cand_amd}"
+            reason += f";different_amendment:{cand_amd}"
 
     elif entities.standard_number:
-        # Standard-only query (e.g. "IS 3055 2024")
-        # Header/title chunks legitimately compete on CrossEncoder score
         identifier_tier = 1
-        reason = "standard_level_match"
+        reason += ";standard_level_match"
 
     else:
-        # Pure semantic query (e.g. "calibration accuracy requirements")
         identifier_tier = 1
-        reason = "semantic_match"
+        reason += ";semantic_match"
 
-    # 3. Version satisfaction
+    # 5. Version satisfaction
     if entities.standard_year or entities.edition_or_version:
         matches_year = (entities.standard_year is not None and cand_year == entities.standard_year)
         matches_ed = bool(entities.edition_or_version and entities.edition_or_version.lower() in cand_ver)
@@ -121,7 +201,36 @@ def compute_intent_ranking_key(item: Any, entities: QueryEntities) -> tuple:
     else:
         version_tier = 0
 
-    return scope_valid, identifier_tier, version_tier, reranker_score, fusion_score, reason
+    # 6. Source authority tier
+    cand_auth = str(_get_field(item, "authority", "") or cand_meta.get("authority", "") or "").upper()
+    if any(a in cand_auth for a in ["BIS", "DPIIT", "GOI", "GOVERNMENT OF INDIA", "MINISTRY"]) or cand_doc_type in ("standard", "qco"):
+        authority_tier = 1
+        reason += ";official_authority"
+    else:
+        authority_tier = 0
+
+    # 7. Currentness tier
+    cand_status = str(cand_meta.get("status", "") or _get_field(item, "status", "") or "").lower()
+    is_curr = cand_meta.get("is_current")
+    if cand_status in ("withdrawn", "superseded") or is_curr is False:
+        currentness_tier = -1
+        reason += ";outdated_version"
+    else:
+        currentness_tier = 1
+
+    return (
+        product_match_tier,
+        intent_match_tier,
+        scope_valid,
+        identifier_tier,
+        version_tier,
+        authority_tier,
+        currentness_tier,
+        reranker_score,
+        fusion_score,
+        reason,
+    )
+
 
 
 class Reranker:
@@ -311,7 +420,8 @@ class Reranker:
         self,
         query: str,
         results: List[Dict[str, Any]],
-        top_k: Optional[int] = None
+        top_k: Optional[int] = None,
+        query_context: Optional[Any] = None,
     ) -> List[Dict[str, Any]]:
         """
         Rerank candidate results using a Cross-Encoder.
@@ -478,12 +588,23 @@ class Reranker:
 
         # 2. Multi-tier intent-aware sort (stable sort in reverse)
         def _sort_key(item):
-            scope_valid, id_tier, ver_tier, r_score, f_score, reason = compute_intent_ranking_key(item, entities)
+            (
+                p_tier,
+                i_tier,
+                scope_valid,
+                id_tier,
+                ver_tier,
+                auth_tier,
+                curr_tier,
+                r_score,
+                f_score,
+                reason,
+            ) = compute_intent_ranking_key(item, entities, query_context=query_context)
             if hasattr(item, "ranking_reason"):
                 item.ranking_reason = reason
             elif isinstance(item, dict):
                 item["ranking_reason"] = reason
-            return (scope_valid, id_tier, ver_tier, r_score, f_score)
+            return (p_tier, i_tier, scope_valid, id_tier, ver_tier, auth_tier, curr_tier, r_score, f_score)
 
         reranked_results.sort(key=_sort_key, reverse=True)
 

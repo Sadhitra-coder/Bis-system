@@ -76,8 +76,15 @@ def build_query_context(
     # 5. Non-destructively overlay profile context
     merged_business_ctx = merge_business_contexts(parsed_profile, effective_query_ctx)
 
-    # 6. Intent Classification
+    # 6. Intent Classification & Structured Intent Extraction
     intent = classify_intent(query=query, entities=entities, client=client)
+    from app.query_intelligence.classifier import extract_structured_intent
+    structured_intent = extract_structured_intent(
+        query=query,
+        entities=entities,
+        business_context=merged_business_ctx,
+        client=client,
+    )
 
     # 7. Retrieval Strategy & Query State
     strategy = select_retrieval_strategy(intent=intent, entities=entities)
@@ -97,6 +104,7 @@ def build_query_context(
         "normalized_query": normalized_q,
         "entities": entities.to_dict(),
         "intent": intent.to_dict(),
+        "structured_intent": structured_intent.to_dict(),
         "query_state": query_state.value,
         "retrieval_strategy": strategy.value,
         "business_context_signals": merged_business_ctx.raw_signals,
@@ -113,6 +121,7 @@ def build_query_context(
         query_state=query_state,
         retrieval_strategy=strategy,
         retrieval_query_variants=variants,
+        structured_intent=structured_intent,
         trace=trace,
     )
 
@@ -122,12 +131,14 @@ __all__ = [
     "QueryLifecycleState",
     "RetrievalStrategy",
     "IntentClassification",
+    "StructuredQueryIntent",
     "BusinessContext",
     "QueryContext",
     "build_query_context",
     "classify_intent",
     "classify_intent_deterministic",
     "classify_intent_llm",
+    "extract_structured_intent",
     "extract_business_context_from_query",
     "merge_business_contexts",
     "select_retrieval_strategy",

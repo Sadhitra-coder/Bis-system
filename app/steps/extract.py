@@ -31,7 +31,10 @@ try:
 except Exception:
     pass
 
-from docling.document_converter import DocumentConverter
+try:
+    from docling.document_converter import DocumentConverter
+except ImportError:
+    DocumentConverter = None
 
 
 logger = logging.getLogger(__name__)

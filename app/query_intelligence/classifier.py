@@ -21,7 +21,12 @@ from typing import Any, Dict, List, Optional, Tuple
 from app.config import settings
 from app.llm_client import OpenAIClient
 from app.rag.query import QueryEntities, normalize_query
-from app.query_intelligence.models import IntentClassification, QueryIntentType
+from app.query_intelligence.models import (
+    BusinessContext,
+    IntentClassification,
+    QueryIntentType,
+    StructuredQueryIntent,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -30,6 +35,57 @@ logger = logging.getLogger(__name__)
 # ============================================================
 # DETERMINISTIC INTENT REGEX PATTERNS
 # ============================================================
+
+# 0. Laboratory search: "Find a testing laboratory", "show me laboratories", "testing facilities"
+_LABORATORY_SEARCH_PATTERN = re.compile(
+    r'\b(?:(?:find|search|list|show|locate|where\s+are)\s+(?:a\s+)?(?:testing\s+)?(?:laborator(?:y|ies)|testing\s+facilit(?:y|ies)|labs?)|'
+    r'(?:testing\s+)?(?:laborator(?:y|ies)|labs?)\s+(?:for|available|near|list|search)|'
+    r'show\s+me\s+laboratories|testing\s+laborator(?:y|ies)|accredited\s+labs?)\b',
+    re.IGNORECASE
+)
+
+# 0b. QCO applicability: "Does QCO X apply to my product?", "is QCO applicable"
+_QCO_APPLICABILITY_PATTERN = re.compile(
+    r'\b(?:(?:does|is|do)\s+(?:the\s+)?qco\b|'
+    r'does\s+qco\s+.*?\s+apply|'
+    r'qco\s+(?:applicable|apply|requirement|scope|mandat)|'
+    r'quality\s+control\s+order\s+(?:apply|applicable|mandatory))\b',
+    re.IGNORECASE
+)
+
+# 0c. Source lookup: "where is this published", "source of qco", "gazette notification source"
+_SOURCE_LOOKUP_PATTERN = re.compile(
+    r'\b(?:where\s+is\s+(?:this|it)\s+published|gazette\s+notification\s+(?:for|source)|'
+    r'source\s+(?:document|publication|link|reference|lookup))\b',
+    re.IGNORECASE
+)
+
+# 0d. Regulatory update: "latest regulatory updates", "recent changes in orders"
+_REGULATORY_UPDATE_PATTERN = re.compile(
+    r'\b(?:regulatory\s+updates?|latest\s+(?:gazette|notification|orders?|updates?|changes)|'
+    r'recent\s+(?:changes|revisions|amendments))\b',
+    re.IGNORECASE
+)
+
+# 0e. Product compliance: "product compliance", "is this product compliant"
+_PRODUCT_COMPLIANCE_PATTERN = re.compile(
+    r'\b(?:product\s+compliance|is\s+(?:the\s+)?product\s+compliant|'
+    r'compliance\s+(?:requirements?|status|mandate)\s+for)\b',
+    re.IGNORECASE
+)
+
+# 0f. Testing requirement: "testing requirements for", "what tests are required"
+_TESTING_REQUIREMENT_PATTERN = re.compile(
+    r'\b(?:testing\s+requirements?|test\s+requirements?|what\s+tests?\s+(?:are\s+)?required|'
+    r'testing\s+(?:parameters?|methods?|protocol)|test\s+procedures?)\b',
+    re.IGNORECASE
+)
+
+# 0g. Explicitly unsupported topics: recipe, weather, sports, general entertainment
+_UNSUPPORTED_PATTERN = re.compile(
+    r'\b(?:recipe\s+for|weather\s+(?:in|forecast)|movie|song|joke|sports\s+score|cryptocurrency|bitcoin)\b',
+    re.IGNORECASE
+)
 
 # 1. Applicability intent: "is IS 3055 applicable...", "does this apply to...", "mandatory for..."
 _APPLICABILITY_PATTERN = re.compile(
@@ -192,6 +248,53 @@ def classify_intent_deterministic(
         cand_map[QueryIntentType.COMPARISON_QUERY] = 0.90
         signals.append("keyword:comparison")
 
+    # 0. Laboratory search intent (Requirement 2 & 13)
+    has_lab_search = bool(_LABORATORY_SEARCH_PATTERN.search(norm_q))
+    if has_lab_search:
+        cand_map[QueryIntentType.LABORATORY_SEARCH] = 0.99
+        signals.append("keyword:laboratory_search")
+
+    # 0b. QCO applicability intent (Requirement 2)
+    has_qco_applicability = bool(_QCO_APPLICABILITY_PATTERN.search(norm_q))
+    if has_qco_applicability:
+        cand_map[QueryIntentType.QCO_APPLICABILITY] = 0.98
+        signals.append("keyword:qco_applicability")
+
+    # 0c. Source lookup intent (Requirement 2)
+    has_source_lookup = bool(_SOURCE_LOOKUP_PATTERN.search(norm_q))
+    if has_source_lookup:
+        cand_map[QueryIntentType.SOURCE_LOOKUP] = 0.95
+        signals.append("keyword:source_lookup")
+
+    # 0d. Regulatory update intent (Requirement 2)
+    has_regulatory_update = bool(_REGULATORY_UPDATE_PATTERN.search(norm_q))
+    if has_regulatory_update:
+        cand_map[QueryIntentType.REGULATORY_UPDATE] = 0.95
+        signals.append("keyword:regulatory_update")
+
+    # 0e. Product compliance intent (Requirement 2)
+    has_product_compliance = bool(_PRODUCT_COMPLIANCE_PATTERN.search(norm_q))
+    if has_product_compliance:
+        cand_map[QueryIntentType.PRODUCT_COMPLIANCE] = 0.94
+        signals.append("keyword:product_compliance")
+
+    # 0f. Testing requirement intent (Requirement 2)
+    has_testing_requirement = bool(_TESTING_REQUIREMENT_PATTERN.search(norm_q))
+    if has_testing_requirement:
+        cand_map[QueryIntentType.TESTING_REQUIREMENT] = 0.95
+        signals.append("keyword:testing_requirement")
+
+    # 0g. Explicitly unsupported topics (Requirement 2)
+    has_unsupported = bool(_UNSUPPORTED_PATTERN.search(norm_q))
+    if has_unsupported:
+        cand_map[QueryIntentType.UNSUPPORTED] = 0.95
+        signals.append("keyword:unsupported_topic")
+
+    has_std_lookup_exact = bool(re.search(r'\bwhat\s+(?:is\s+the\s+)?standard\s+applies\s+to\b', norm_q, re.IGNORECASE))
+    if has_std_lookup_exact:
+        cand_map[QueryIntentType.STANDARD_LOOKUP] = 0.97
+        signals.append("keyword:standard_lookup")
+
     has_std_discovery = bool(_STANDARD_DISCOVERY_PATTERN.search(norm_q))
     if has_std_discovery:
         cand_map[QueryIntentType.STANDARD_DISCOVERY] = 0.95
@@ -257,7 +360,7 @@ def classify_intent_deterministic(
         _APPLICABILITY_PATTERN.search(norm_q)
         or _HINDI_APPLICABILITY_PATTERN.search(norm_q)
     )
-    if has_applicability and not has_std_discovery:
+    if has_applicability and not has_std_discovery and not has_std_lookup_exact:
         cand_map[QueryIntentType.APPLICABILITY_QUERY] = 0.95 if entities.standard_number else 0.88
         signals.append("keyword:applicability")
     elif has_applicability:
@@ -301,7 +404,31 @@ def classify_intent_deterministic(
     primary_confidence: float
     primary_reasoning: str
 
-    if has_comparison:
+    if has_unsupported:
+        primary_intent = QueryIntentType.UNSUPPORTED
+        primary_confidence = 0.95
+        primary_reasoning = "Query asks about an out-of-domain or unsupported topic."
+    elif has_lab_search:
+        primary_intent = QueryIntentType.LABORATORY_SEARCH
+        primary_confidence = 0.99
+        primary_reasoning = "Inquiry explicitly searching for recognized testing laboratories or facilities."
+    elif has_qco_applicability:
+        primary_intent = QueryIntentType.QCO_APPLICABILITY
+        primary_confidence = 0.98
+        primary_reasoning = "Inquiry evaluating applicability of a Quality Control Order (QCO)."
+    elif has_source_lookup:
+        primary_intent = QueryIntentType.SOURCE_LOOKUP
+        primary_confidence = 0.95
+        primary_reasoning = "Inquiry searching for official gazette, notification, or publication sources."
+    elif has_regulatory_update:
+        primary_intent = QueryIntentType.REGULATORY_UPDATE
+        primary_confidence = 0.95
+        primary_reasoning = "Inquiry requesting latest regulatory updates or gazette notifications."
+    elif has_product_compliance:
+        primary_intent = QueryIntentType.PRODUCT_COMPLIANCE
+        primary_confidence = 0.94
+        primary_reasoning = "Inquiry assessing whether a product complies with regulatory standards."
+    elif has_comparison:
         primary_intent = QueryIntentType.COMPARISON_QUERY
         primary_confidence = 0.90
         primary_reasoning = "Inquiry comparing multiple standards, editions, or requirements."
@@ -313,6 +440,10 @@ def classify_intent_deterministic(
         primary_intent = QueryIntentType.PROCESS_EXPLANATION
         primary_confidence = 0.96
         primary_reasoning = "Inquiry seeking structured steps and process for obtaining BIS certification."
+    elif has_std_lookup_exact:
+        primary_intent = QueryIntentType.STANDARD_LOOKUP
+        primary_confidence = 0.97
+        primary_reasoning = "Inquiry looking up which standard applies to the specified product."
     elif has_std_discovery:
         primary_intent = QueryIntentType.STANDARD_DISCOVERY
         primary_confidence = 0.95
@@ -353,6 +484,10 @@ def classify_intent_deterministic(
         primary_intent = QueryIntentType.STANDARD_LOOKUP
         primary_confidence = 0.96
         primary_reasoning = f"Direct lookup of standard {entities.standard_number}."
+    elif has_testing_requirement:
+        primary_intent = QueryIntentType.TESTING_REQUIREMENT
+        primary_confidence = 0.95
+        primary_reasoning = "Inquiry seeking specific testing requirements or test methods."
     elif has_req_discovery:
         primary_intent = QueryIntentType.REQUIREMENT_DISCOVERY
         primary_confidence = 0.86 if entities.standard_number else (0.65 if word_count <= 3 else 0.75)
@@ -501,3 +636,117 @@ def classify_intent(
             return llm_res
 
     return deterministic_res
+
+
+# ============================================================
+# STRUCTURED QUERY INTENT & ENTITY EXTRACTOR (Requirement 2)
+# ============================================================
+
+def extract_structured_intent(
+    query: str,
+    entities: Optional[QueryEntities] = None,
+    business_context: Optional[BusinessContext] = None,
+    client: Optional[OpenAIClient] = None,
+) -> StructuredQueryIntent:
+    """
+    Extracts structured QueryIntent and all associated product, standard, QCO,
+    jurisdiction, and technical constraint entities (Requirement 2).
+    """
+    norm_q = normalize_query(query)
+    ent = entities or extract_query_entities(norm_q)
+    b_ctx = business_context or BusinessContext()
+
+    intent_cls = classify_intent(query, ent, client=client)
+
+    # 1. Product & Product Category
+    product = b_ctx.product
+    product_category = b_ctx.product_category or product
+    if not product:
+        m_prod = re.search(
+            r'\b(?:for|to|on|regarding|about|covering)\s+(?:our\s+|the\s+|a\s+|an\s+)?([a-zA-Z0-9\s-]+?)(?:\s+(?:under|with|using|in|dated|\?|\.|$))',
+            norm_q,
+            re.IGNORECASE
+        )
+        if m_prod:
+            cand = m_prod.group(1).strip()
+            if cand and not re.search(r'\b(?:is\s+\d+|clause|section|standard|qco)\b', cand, re.IGNORECASE):
+                if 2 < len(cand) < 60:
+                    product = cand
+                    product_category = cand
+
+    # 2. Intended Use
+    intended_use = b_ctx.intended_use
+    if not intended_use:
+        m_use = re.search(r'\b(?:intended\s+for|used\s+for|for\s+use\s+in)\s+([a-zA-Z\s]+)', norm_q, re.IGNORECASE)
+        if m_use:
+            intended_use = m_use.group(1).strip()
+
+    # 3. Technical Characteristics
+    tech_chars = dict(b_ctx.technical_characteristics)
+    param_matches = re.findall(r'(\d+(?:\.\d+)?)\s*(V|A|W|kW|Hz|kV|mA|mm|cm|m|kg|g|MPa|bar)\b', query)
+    for val, unit in param_matches:
+        tech_chars[unit.lower()] = f"{val} {unit}"
+
+    # 4. Standard Identifiers
+    std_identifiers = []
+    if ent.standard_number:
+        std_identifiers.append(ent.standard_number)
+    for m in re.finditer(r'\bIS\s+\d+(?:-\d+)?\b', norm_q, re.IGNORECASE):
+        std_num = m.group(0).upper()
+        if std_num not in std_identifiers:
+            std_identifiers.append(std_num)
+
+    # 5. QCO Identifiers
+    qco_identifiers = []
+    for m in re.finditer(r'\bS\.O\.\s*\d+(?:\([A-Z]\))?|\b[A-Za-z\s]+(?:Quality Control Order|\(Quality Control\) Order)\b', query):
+        qco_val = m.group(0).strip()
+        if qco_val not in qco_identifiers:
+            qco_identifiers.append(qco_val)
+
+    # 6. Jurisdiction
+    jurisdiction = "India"
+    if any(w in norm_q.lower() for w in ["overseas", "foreign", "abroad", "export to india", "import into india"]):
+        jurisdiction = "Foreign Manufacturer"
+
+    # 7. Requested Entity or Service
+    requested_service = None
+    if intent_cls.intent == QueryIntentType.LABORATORY_SEARCH:
+        requested_service = "testing_laboratory"
+    elif intent_cls.intent in (QueryIntentType.STANDARD_LOOKUP, QueryIntentType.STANDARD_DISCOVERY):
+        requested_service = "standard"
+    elif intent_cls.intent == QueryIntentType.QCO_APPLICABILITY:
+        requested_service = "qco"
+    elif intent_cls.intent in (QueryIntentType.CERTIFICATION, QueryIntentType.SCHEME_GUIDANCE, QueryIntentType.PROCESS_EXPLANATION):
+        requested_service = "certification"
+    elif intent_cls.intent in (QueryIntentType.TESTING_REQUIREMENT, QueryIntentType.REQUIREMENT_DISCOVERY):
+        requested_service = "testing_requirement"
+
+    # 8. Constraints
+    constraints = {}
+    if ent.standard_year:
+        constraints["year"] = ent.standard_year
+    if ent.clause_id:
+        constraints["clause_id"] = ent.clause_id
+    if ent.amendment_number:
+        constraints["amendment_number"] = ent.amendment_number
+
+    return StructuredQueryIntent(
+        intent=intent_cls.intent,
+        intent_confidence=intent_cls.intent_confidence,
+        product=product,
+        product_category=product_category,
+        intended_use=intended_use,
+        technical_characteristics=tech_chars,
+        standard_identifiers=std_identifiers,
+        qco_identifiers=qco_identifiers,
+        jurisdiction=jurisdiction,
+        requested_entity_or_service=requested_service,
+        constraints=constraints,
+        signals=intent_cls.signals,
+        candidate_intents=intent_cls.candidate_intents,
+        is_ambiguous=intent_cls.is_ambiguous,
+        classifier_type=intent_cls.classifier_type,
+        raw_query=query,
+        reasoning=intent_cls.reasoning,
+    )
+

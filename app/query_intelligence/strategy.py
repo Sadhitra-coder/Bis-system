@@ -34,13 +34,13 @@ def select_retrieval_strategy(
     if t == QueryIntentType.CLAUSE_LOOKUP:
         return RetrievalStrategy.IDENTIFIER_HEAVY
 
-    elif t == QueryIntentType.STANDARD_LOOKUP:
+    elif t in (QueryIntentType.STANDARD_LOOKUP, QueryIntentType.SOURCE_LOOKUP):
         return RetrievalStrategy.STANDARD_METADATA
 
-    elif t in (QueryIntentType.CURRENTNESS_QUERY, QueryIntentType.VERSION_LOOKUP, QueryIntentType.AMENDMENT_LOOKUP):
+    elif t in (QueryIntentType.CURRENTNESS_QUERY, QueryIntentType.VERSION_LOOKUP, QueryIntentType.AMENDMENT_LOOKUP, QueryIntentType.REGULATORY_UPDATE):
         return RetrievalStrategy.TEMPORAL_AWARE
 
-    elif t == QueryIntentType.REQUIREMENT_DISCOVERY:
+    elif t in (QueryIntentType.REQUIREMENT_DISCOVERY, QueryIntentType.TESTING_REQUIREMENT):
         return RetrievalStrategy.SEMANTIC_CONTEXTUAL
 
     elif t == QueryIntentType.STANDARD_DISCOVERY:
@@ -49,10 +49,13 @@ def select_retrieval_strategy(
     elif t == QueryIntentType.REFERENCE_LOOKUP:
         return RetrievalStrategy.REFERENCE_GRAPH
 
-    elif t == QueryIntentType.APPLICABILITY_QUERY:
+    elif t in (QueryIntentType.APPLICABILITY_QUERY, QueryIntentType.QCO_APPLICABILITY, QueryIntentType.PRODUCT_COMPLIANCE):
         return RetrievalStrategy.APPLICABILITY_EVALUATION
 
-    elif t == QueryIntentType.AMBIGUOUS_QUERY:
+    elif t in (QueryIntentType.CERTIFICATION, QueryIntentType.SCHEME_GUIDANCE, QueryIntentType.PROCESS_EXPLANATION):
+        return RetrievalStrategy.STANDARD_METADATA
+
+    elif t in (QueryIntentType.AMBIGUOUS_QUERY, QueryIntentType.GENERAL_INFORMATION, QueryIntentType.UNSUPPORTED, QueryIntentType.UNKNOWN):
         return RetrievalStrategy.BROAD_FALLBACK
 
     return RetrievalStrategy.SEMANTIC_CONTEXTUAL
@@ -67,18 +70,18 @@ def determine_query_state(
     Determines the lifecycle state of the query.
     Enforces MISSING_REQUIRED_CONTEXT when an applicability inquiry lacks product details.
     """
-    # 1. Ambiguous query state
-    if intent.is_ambiguous or intent.intent == QueryIntentType.AMBIGUOUS_QUERY:
+    # 1. Ambiguous or unsupported query state
+    if intent.is_ambiguous or intent.intent in (QueryIntentType.AMBIGUOUS_QUERY, QueryIntentType.UNSUPPORTED, QueryIntentType.UNKNOWN):
         return QueryLifecycleState.AMBIGUOUS
 
     # 2. Missing context for applicability inquiries (Section 17)
-    if intent.intent == QueryIntentType.APPLICABILITY_QUERY:
+    if intent.intent in (QueryIntentType.APPLICABILITY_QUERY, QueryIntentType.QCO_APPLICABILITY, QueryIntentType.PRODUCT_COMPLIANCE):
         if not business_context.has_explicit_product:
             return QueryLifecycleState.MISSING_REQUIRED_CONTEXT
 
     # 3. Temporal query state
     if (
-        intent.intent in (QueryIntentType.CURRENTNESS_QUERY, QueryIntentType.VERSION_LOOKUP)
+        intent.intent in (QueryIntentType.CURRENTNESS_QUERY, QueryIntentType.VERSION_LOOKUP, QueryIntentType.REGULATORY_UPDATE)
         or bool(getattr(entities, "relative_temporal", None))
     ):
         return QueryLifecycleState.TEMPORAL
@@ -88,7 +91,7 @@ def determine_query_state(
         return QueryLifecycleState.IDENTIFIER_SPECIFIC
 
     # 5. Semantic discovery
-    if intent.intent in (QueryIntentType.REQUIREMENT_DISCOVERY, QueryIntentType.STANDARD_DISCOVERY):
+    if intent.intent in (QueryIntentType.REQUIREMENT_DISCOVERY, QueryIntentType.TESTING_REQUIREMENT, QueryIntentType.STANDARD_DISCOVERY):
         return QueryLifecycleState.SEMANTIC
 
     return QueryLifecycleState.NORMAL

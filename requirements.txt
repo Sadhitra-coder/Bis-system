@@ -22,7 +22,7 @@ docling==2.55.1                   # app/steps/extract.py
 # ---------------- Embeddings / vector index ----------------
 sentence-transformers==5.1.0      # app/steps/embed.py, app/rag/retriever.py, app/rag/reranker.py
 chromadb==1.3.0                   # app/steps/embed.py, app/rag/retriever.py
-numpy==1.26.4                     # app/rag/retriever.py
+numpy>=1.26.4                     # app/rag/retriever.py
 
 # NOTE on TensorFlow / Keras
 # --------------------------

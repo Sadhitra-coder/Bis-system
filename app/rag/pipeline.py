@@ -72,6 +72,13 @@ from app.applicability import (
 )
 from app.schemes.selector import select_certification_scheme, SchemeRecommendation
 from app.certification.process import build_certification_checklist, CertificationChecklist
+from app.assessment import (
+    AssessmentLifecycleState,
+    AssessmentManager,
+    ProductPassportAssessment,
+    VerificationLevel,
+)
+
 
 
 
@@ -180,6 +187,7 @@ class RAGPipeline:
         )
 
         self.knowledge_repo = knowledge_repo or default_repository
+        self.assessment_manager = AssessmentManager()
 
         # ----------------------------------------------------
         # INITIALIZE RETRIEVER
@@ -276,12 +284,23 @@ class RAGPipeline:
         v_reason = confidence.verification_reason
         if query_context.intent.intent == QueryIntentType.STANDARD_DISCOVERY:
             v_reason = "No candidate standards found in the ingested corpus matching the specified product."
+        elif not v_reason:
+            v_reason = "Evidence not found in the verified knowledge base."
 
+        prod_ctx = extract_product_context(query=query, business_context=query_context.business_context)
+        assessment = self.assessment_manager.get_or_create_for_query(
+            query=query,
+            normalized_product_context=prod_ctx,
+            query_intent=getattr(query_context, "structured_intent", None),
+            knowledge_version="v1.0-official",
+        )
+        assessment.transition_to(AssessmentLifecycleState.NO_EVIDENCE, v_reason)
 
         return {
             "query": query,
             "answer": (
-                f"Verification Required: {v_reason} "
+                f"Verification Required: Evidence not found in the verified knowledge base ({v_reason}). "
+                "ComplyWise could not verify this requirement from an authoritative source. "
                 "Please verify against authoritative Indian Standard publications."
             ),
 
@@ -295,10 +314,11 @@ class RAGPipeline:
             ),
             "confidence_score": confidence.score,
             "confidence_level": confidence.level.value,
-            "decision": confidence.decision.value,
-            "query_state": confidence.query_state.value,
+            "decision": Decision.VERIFICATION_REQUIRED.value,
+            "query_state": QueryState.INSUFFICIENT_EVIDENCE.value,
             "verification_required": True,
             "verification_reason": v_reason,
+            "verification_level": VerificationLevel.VERIFICATION_REQUIRED.value,
             "evidence_summary": "No candidate chunks retrieved.",
             "confidence_trace": confidence.trace,
             "citations": [],
@@ -312,10 +332,30 @@ class RAGPipeline:
             "intent_confidence": query_context.intent.intent_confidence,
             "query_context": query_context.to_dict(),
             # Phase 11 Product-to-Standard Candidate Mapping fields
-            "product_context": None,
+            "product_context": prod_ctx.to_dict() if prod_ctx else None,
             "candidate_standards": [],
             "language": "hi" if bool(re.search(r"[\u0900-\u097F]", query)) else "en",
             "laboratories": [],
+            # Assessment & Trace
+            "assessment": assessment.to_dict(),
+            "assessment_id": assessment.assessment_id,
+            "product_id": assessment.product_id,
+            "trace": {
+                "user_query": query,
+                "intent": query_context.intent.intent.value,
+                "structured_intent": query_context.structured_intent.to_dict() if getattr(query_context, "structured_intent", None) else {},
+                "normalized_product": prod_ctx.to_dict() if prod_ctx else None,
+                "retrieval_filters": {},
+                "top_retrieved_documents": [],
+                "reranked_documents": [],
+                "accepted_evidence": [],
+                "rejected_evidence": [],
+                "applicability_check": None,
+                "final_status": VerificationLevel.VERIFICATION_REQUIRED.value,
+                "final_claims": [],
+                "assessment_id": assessment.assessment_id,
+                "lifecycle_state": assessment.lifecycle_state.value,
+            },
         }
 
 
@@ -594,7 +634,7 @@ class RAGPipeline:
         )
 
         # ====================================================
-        # STEP 0: QUERY INTELLIGENCE (Phase 10)
+        # STEP 0: QUERY INTELLIGENCE & ASSESSMENT (Phase 10 & Requirements 4, 10)
         # ====================================================
 
         query_context = build_query_context(
@@ -603,6 +643,21 @@ class RAGPipeline:
             profile_context=profile_context,
         )
 
+        product_context_obj = extract_product_context(
+            query=query,
+            business_context=query_context.business_context,
+        )
+
+        # Context isolation & assessment lifecycle binding (Requirements 4, 10)
+        assessment = self.assessment_manager.get_or_create_for_query(
+            query=query,
+            normalized_product_context=product_context_obj,
+            query_intent=getattr(query_context, "structured_intent", None),
+            knowledge_version="v1.0-official",
+            profile_version=getattr(profile_context, "version", "v1.0") if profile_context else "v1.0",
+        )
+        assessment.transition_to(AssessmentLifecycleState.CLASSIFYING, "Query intent classified.")
+
         # ====================================================
         # STEP 1: RETRIEVAL
         # ====================================================
@@ -610,6 +665,7 @@ class RAGPipeline:
         logger.info(
             "Step 1/3: Retrieving candidate chunks..."
         )
+        assessment.transition_to(AssessmentLifecycleState.RETRIEVING, "Retrieving candidate evidence.")
 
         retrieval_kwargs: Dict[str, Any] = {
             "query": query,
@@ -662,14 +718,12 @@ class RAGPipeline:
         reranked_results = (
             self.reranker.rerank(
                 query=query,
-
-                results=
-                    retrieved_results,
-
-                top_k=
-                    final_rerank_top_k
+                results=retrieved_results,
+                top_k=final_rerank_top_k,
+                query_context=query_context,
             )
         )
+        assessment.transition_to(AssessmentLifecycleState.VERIFYING, "Verifying applicability, claims, and grounding.")
 
         logger.info(
             f"Selected "
@@ -866,10 +920,6 @@ class RAGPipeline:
             query_context=query_context,
         )
 
-        # ====================================================
-        # STEP 2.5: PRODUCT-TO-STANDARD CANDIDATE MAPPING (Phase 11)
-        # ====================================================
-        product_context_obj: Optional[ProductContext] = None
         candidate_standards_list: List[Dict[str, Any]] = []
         candidates: List[Any] = []
 
@@ -878,26 +928,24 @@ class RAGPipeline:
                 QueryIntentType.STANDARD_DISCOVERY,
                 QueryIntentType.APPLICABILITY_QUERY,
                 QueryIntentType.SCHEME_GUIDANCE,
+                QueryIntentType.QCO_APPLICABILITY,
+                QueryIntentType.PRODUCT_COMPLIANCE,
             )
             or query_context.business_context.has_explicit_product
+            or (product_context_obj is not None and not product_context_obj.is_empty)
         )
 
-        if is_product_mapping_intent:
-            product_context_obj = extract_product_context(
-                query=query,
-                business_context=query_context.business_context,
+        if is_product_mapping_intent and product_context_obj and not product_context_obj.is_empty:
+            candidates = discover_standard_candidates(
+                product_context=product_context_obj,
+                retriever=self.retriever,
+                reranker=self.reranker,
+                knowledge_repo=self.knowledge_repo,
+                temporal_resolver=CurrentnessResolver,
+                top_k=5,
+                evidence_confidence_level=confidence.level,
             )
-            if not product_context_obj.is_empty:
-                candidates = discover_standard_candidates(
-                    product_context=product_context_obj,
-                    retriever=self.retriever,
-                    reranker=self.reranker,
-                    knowledge_repo=self.knowledge_repo,
-                    temporal_resolver=CurrentnessResolver,
-                    top_k=5,
-                    evidence_confidence_level=confidence.level,
-                )
-                candidate_standards_list = [c.to_dict() for c in candidates]
+            candidate_standards_list = [c.to_dict() for c in candidates]
 
         # Discover standard requirements from candidates or retrieved evidence
         discovered_reqs = []
@@ -1025,12 +1073,12 @@ class RAGPipeline:
                             scope_text = getattr(cl, "clause_text", None) or getattr(cl, "heading_path", None) or getattr(cl, "clause_title", None)
                             break
 
-                assessment = evaluate_standard_applicability(
+                app_eval = evaluate_standard_applicability(
                     product=product_context_obj,
                     candidate=cand,
                     scope_text=scope_text,
                 )
-                applicability_assessments.append(assessment)
+                applicability_assessments.append(app_eval)
 
             readiness_report = synthesize_compliance_readiness(
                 product=product_context_obj,
@@ -1420,19 +1468,43 @@ class RAGPipeline:
         # STEP 4: LABORATORY SUGGESTIONS & HINDI TRANSLATION
         # ====================================================
 
-        # Laboratory suggestion lookup (Part 2)
-        top_std = evidence_items[0].standard_number if evidence_items else None
-        target_std = entities.standard_number or top_std
-        if not target_std and candidate_standards_list:
-            target_std = candidate_standards_list[0].get("standard_number")
-
+        # Laboratory suggestion lookup (Requirements 2, 3, 13)
+        # Laboratories must ONLY appear when detected intent is LABORATORY_SEARCH
         laboratories_list: List[Dict[str, Any]] = []
-        if target_std and self.knowledge_repo is not None:
-            try:
-                labs = self.knowledge_repo.get_laboratories_for_standard(target_std)
-                laboratories_list = [l.model_dump() if hasattr(l, "model_dump") else l.dict() for l in labs]
-            except Exception as e:
-                logger.debug("Failed to lookup laboratories for %s: %s", target_std, e)
+        if query_context.intent.intent == QueryIntentType.LABORATORY_SEARCH:
+            top_std = evidence_items[0].standard_number if evidence_items else None
+            target_std = entities.standard_number or top_std
+            if not target_std and candidate_standards_list:
+                target_std = candidate_standards_list[0].get("standard_number")
+
+            if target_std and self.knowledge_repo is not None:
+                try:
+                    labs = self.knowledge_repo.get_laboratories_for_standard(target_std)
+                    laboratories_list = [l.model_dump() if hasattr(l, "model_dump") else l.dict() for l in labs]
+                except Exception as e:
+                    logger.debug("Failed to lookup laboratories for %s: %s", target_std, e)
+
+            if laboratories_list:
+                lab_bullets = "\n".join(f"- **{l.get('name')}** — {l.get('city')}, {l.get('state')} (Accreditation: {l.get('accreditation_number', 'N/A')})" for l in laboratories_list)
+                answer = (
+                    f"### Recognized Testing Laboratories for {target_std or 'the Product'}\n\n"
+                    f"The following BIS-recognized testing laboratories are available for product testing:\n\n"
+                    f"{lab_bullets}\n\n"
+                    f"*(Note: Verify active accreditation scope on the official BIS portal before sample submission.)*"
+                )
+                raw_claims = []
+                final_decision = Decision.ANSWER.value
+                final_verification_required = False
+            else:
+                answer = (
+                    f"### ⚠️ Testing Laboratories Not Found\n\n"
+                    f"No recognized testing laboratories were found in the verified knowledge base for: *\"{query}\"*. "
+                    f"Please verify laboratory recognition and testing scope directly on the official BIS portal (services.bis.gov.in)."
+                )
+                raw_claims = []
+                final_decision = Decision.VERIFICATION_REQUIRED.value
+                final_verification_required = True
+                final_verification_reason = "No recognized testing laboratories found in verified knowledge base."
 
         # Hindi back-translation (Part 1)
         if is_hindi and settings.llm_available and self.generator is not None:
@@ -1496,6 +1568,75 @@ class RAGPipeline:
             f"decision={final_decision}."
         )
 
+        # Assemble accepted and rejected evidence traces (Requirement 14)
+        accepted_evidence_trace = []
+        for ev in evidence_items[:final_rerank_top_k]:
+            accepted_evidence_trace.append({
+                "chunk_id": ev.chunk_id,
+                "standard_number": ev.standard_number,
+                "clause_id": ev.clause_id,
+                "authority": ev.authority,
+                "ranking_reason": getattr(ev, "ranking_reason", "relevant_and_verified"),
+            })
+
+        rejected_evidence_trace = []
+        reranked_cids = {getattr(r, "chunk_id", None) or (r.get("chunk_id") if isinstance(r, dict) else None) for r in reranked_results}
+        for r in retrieved_results:
+            cid = getattr(r, "chunk_id", None) or (r.get("chunk_id") if isinstance(r, dict) else None)
+            if cid not in reranked_cids:
+                reason = getattr(r, "ranking_reason", None) or (r.get("ranking_reason") if isinstance(r, dict) else None)
+                if not reason:
+                    meta = getattr(r, "metadata", {}) if hasattr(r, "metadata") else (r.get("metadata") or {})
+                    std_title = getattr(r, "standard_title", "") or meta.get("standard_title", "")
+                    doc_type = getattr(r, "document_type", "") or meta.get("document_type", "")
+                    if doc_type == "laboratory" and query_context.intent.intent != QueryIntentType.LABORATORY_SEARCH:
+                        reason = "wrong intent: laboratory document not requested by query intent"
+                    elif product_context_obj and not product_context_obj.is_empty and std_title:
+                        p_display = product_context_obj.product_name or product_context_obj.primary_identifier or "unspecified"
+                        reason = f"wrong product: evidence covers '{std_title}', which conflicts with target product '{p_display}'"
+                    else:
+                        reason = "insufficient relevance / low multi-signal score"
+                rejected_evidence_trace.append({
+                    "chunk_id": cid,
+                    "reason": reason,
+                })
+
+        # Claim validation before response delivery (Requirement 8)
+        validated_claims = []
+        for cl in claims:
+            cl_dict = dict(cl)
+            cl_text = cl_dict.get("text", "")
+            has_valid_support = len(evidence_items) > 0 and (cl_dict.get("citation_ids") or not raw_claims)
+            if product_context_obj and not product_context_obj.is_empty and product_context_obj.product_name:
+                p_tokens = [w for w in re.findall(r"\b[a-zA-Z]{4,}\b", product_context_obj.product_name.lower()) if w not in ("type", "portable", "general")]
+                other_domains = ["toy", "toys", "cement", "thermometer", "smart meter", "cable", "wires", "shoe", "glove"]
+                for od in other_domains:
+                    if od in cl_text.lower() and not any(od in pt for pt in p_tokens):
+                        has_valid_support = False
+                        cl_dict["rejection_reason"] = f"wrong product claim: mentions '{od}' while assessment product is '{product_context_obj.product_name}'"
+                        break
+            if has_valid_support:
+                cl_dict["status"] = "VERIFIED"
+            else:
+                cl_dict["status"] = "VERIFICATION_REQUIRED"
+            validated_claims.append(cl_dict)
+
+        # Final Safe Answer Policy Level (Requirement 12)
+        if final_decision == Decision.ANSWER.value and not final_verification_required:
+            final_verification_level = VerificationLevel.VERIFIED
+            assessment.lifecycle_state = AssessmentLifecycleState.ASSESSED
+        elif final_decision == Decision.QUALIFIED_ANSWER.value:
+            final_verification_level = VerificationLevel.PARTIALLY_VERIFIED
+            assessment.lifecycle_state = AssessmentLifecycleState.NEEDS_VERIFICATION
+        else:
+            final_verification_level = VerificationLevel.VERIFICATION_REQUIRED
+            assessment.lifecycle_state = AssessmentLifecycleState.NO_EVIDENCE if not evidence_items else AssessmentLifecycleState.NEEDS_VERIFICATION
+
+        assessment.verification_level = final_verification_level
+        assessment.decision = final_decision
+        assessment.generated_answer = answer
+        assessment.evidence_set = [ev.chunk_id for ev in evidence_items]
+
         response = {
             "query": original_query,
             "answer": answer,
@@ -1511,10 +1652,11 @@ class RAGPipeline:
             "query_state": confidence.query_state.value,
             "verification_required": final_verification_required,
             "verification_reason": final_verification_reason,
+            "verification_level": final_verification_level.value,
             "evidence_summary": evidence_summary,
             "confidence_trace": confidence.trace,
             "citations": citations,
-            "claims": claims,
+            "claims": validated_claims,
             "citation_coverage": grounding.citation_coverage,
             "grounding_status": grounding.status.value,
             "grounding_reason": grounding.reason,
@@ -1545,6 +1687,27 @@ class RAGPipeline:
             # Phase 16 Scheme Guidance & Certification Checklist fields (PRD R3, R4)
             "scheme_recommendation": scheme_recommendation_dict,
             "certification_checklist": certification_checklist_dict,
+            # Assessment & Context Isolation (Requirements 4, 10)
+            "assessment": assessment.to_dict(),
+            "assessment_id": assessment.assessment_id,
+            "product_id": assessment.product_id,
+            # Debug / Trace Mode (Requirement 14)
+            "trace": {
+                "user_query": original_query,
+                "intent": query_context.intent.intent.value,
+                "structured_intent": query_context.structured_intent.to_dict() if getattr(query_context, "structured_intent", None) else {},
+                "normalized_product": product_context_obj.to_dict() if product_context_obj else None,
+                "retrieval_filters": getattr(self.retriever, "last_filters", {}),
+                "top_retrieved_documents": [getattr(r, "chunk_id", None) or (r.get("chunk_id") if isinstance(r, dict) else str(r)) for r in retrieved_results],
+                "reranked_documents": [getattr(r, "chunk_id", None) or (r.get("chunk_id") if isinstance(r, dict) else str(r)) for r in reranked_results],
+                "accepted_evidence": accepted_evidence_trace,
+                "rejected_evidence": rejected_evidence_trace,
+                "applicability_check": applicability_assessments[0].to_dict() if applicability_assessments else None,
+                "final_status": final_verification_level.value,
+                "final_claims": validated_claims,
+                "assessment_id": assessment.assessment_id,
+                "lifecycle_state": assessment.lifecycle_state.value,
+            },
         }
 
 
